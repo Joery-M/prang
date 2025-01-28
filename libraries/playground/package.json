@@ -1,0 +1,16 @@
+{
+  "name": "@prang/playground",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --force",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "vite": "^6.0.7",
+    "vite-plugin-inspect": "^10.0.6",
+    "vite-plugin-prang": "workspace:^"
+  },
+  "dependencies": {
+    "@prang/core": "workspace:^"
+  }
+}
