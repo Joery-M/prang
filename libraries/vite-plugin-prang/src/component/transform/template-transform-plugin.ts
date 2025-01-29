@@ -1,5 +1,7 @@
 import {
     baseCompile,
+    baseParse,
+    BindingTypes,
     buildDirectiveArgs,
     buildProps,
     createArrayExpression,
@@ -14,6 +16,7 @@ import { parse } from 'node:path';
 import { type Plugin } from 'vite';
 import { ComponentMap } from '../../internal';
 import { parseTemplateRequest } from '../../utils';
+import { transformModel } from './vModel';
 
 export function TemplateTransformPlugin(): Plugin {
     return {
@@ -56,13 +59,18 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
 
     const meta = ComponentMap.get(scopeId);
 
+    baseParse(code, {
+        compatConfig: { COMPILER_FILTERS: true }
+    });
     const result = baseCompile(code, {
         inline: false,
         mode: 'module',
         compatConfig: { COMPILER_FILTERS: true },
         scopeId,
         filename,
+        bindingMetadata: { text: BindingTypes.SETUP_MAYBE_REF },
         runtimeModuleName: '@prang/core/runtime',
+        directiveTransforms: { model: transformModel },
         nodeTransforms: [
             (node, ctx) => {
                 if (node.type == NodeTypes.ELEMENT && node.tagType == ElementTypes.COMPONENT) {
@@ -72,10 +80,9 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
                             props.directives && props.directives.length
                                 ? createArrayExpression(props.directives.map((dir) => buildDirectiveArgs(dir, ctx)))
                                 : undefined;
-                        const hoisted = ctx.hoist('new ' + node.tag + '()');
                         const vnode = createVNodeCall(
                             ctx,
-                            hoisted.content,
+                            node.tag + '.comp()',
                             props.props,
                             node.children,
                             props.patchFlag === 0 ? undefined : props.patchFlag,
@@ -92,7 +99,7 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
                 }
             }
         ],
-        hmr: true,
+        hoistStatic: true,
         inSSR: ssr
     });
 

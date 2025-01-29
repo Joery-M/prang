@@ -1,12 +1,11 @@
+import { parse } from '@babel/parser';
+import { type ClassDeclaration } from '@babel/types';
+import { resolveIdentifier, walkAST, walkImportDeclaration, type ImportBinding } from 'ast-kit';
+import dedent from 'dedent';
 import MagicString from 'magic-string';
-import type { AstNode, RollupAstNode } from 'rollup';
-import { parseAst, type Plugin } from 'vite';
-import { walk } from 'zimmerframe';
+import { type Plugin } from 'vite';
 import { ComponentMap, type ComponentMeta } from '../../internal';
 import { getHash, parseTemplateRequest } from '../../utils';
-import { doExpression, isClassMethod, type Class, type ClassDeclaration } from '@babel/types';
-import { resolveObjectKey, walkAST } from 'ast-kit';
-import { parse } from '@babel/parser';
 
 export function ComponentTransformPlugin(): Plugin {
     return {
@@ -36,7 +35,7 @@ export function ComponentTransformPlugin(): Plugin {
             const s = new MagicString(code, { filename: id });
             let classDeclarationIndex = -1;
 
-            const promises: Promise<any>[] = [];
+            const imports: Record<string, ImportBinding> = {};
 
             const resolveTemplate = (compMeta: ComponentMeta, node: ClassDeclaration, scopeHash: string) => {
                 if (!compMeta.template) return;
@@ -52,28 +51,42 @@ export function ComponentTransformPlugin(): Plugin {
                     `import { render as __render_${classDeclarationIndex} } from ${JSON.stringify(templateUrl)};\n`
                 );
 
-                const constructor = body.body.find((b) => b.type === 'ClassMethod' && b.kind === 'constructor');
-
-                const methods = body.body.filter((prop) => isClassMethod(prop, { kind: 'method', computed: true }));
-                const methodKeys = methods
-                    .map((m) => {
-                        const key = s.original.slice(m.key.start!, m.key.end!);
-                        return key + ': this.' + key;
-                    })
-                    .join(',');
-                const setupCall = `{ ...this${methods.length > 0 ? ',' : ''} ${methodKeys}}`;
-                if (constructor) {
-                    s.appendRight(constructor.end - 1, `\nthis.render = __render_${classDeclarationIndex};\n`);
-                    s.appendRight(constructor.end - 1, `\nthis.setup = () => (${setupCall});\n`);
-                } else {
-                    s.appendRight((body.end ?? 1) - 1, `\nrender = __render_${classDeclarationIndex}\n`);
-                    s.appendRight((body.end ?? 1) - 1, `\nsetup() { return ${setupCall}; };\n`);
+                const componentName = compMeta.selector
+                    ? compMeta.selector
+                    : node.id
+                    ? resolveIdentifier(node.id)[0]
+                    : this.getFileName(compMeta.sourceId);
+                s.appendRight(
+                    (body.end ?? 1) - 1,
+                    dedent`
+                        static comp = () => 
+                            this.compInstance ||
+                            (this.compInstance = {
+                                __name: ${JSON.stringify(componentName)},
+                                __file: ${JSON.stringify(compMeta.sourceId)},
+                                setup: (__props) => {
+                                    const instance = new this();
+                                    return (ctx, cache) => __render_${classDeclarationIndex}(instance, cache, __props, instance, instance);
+                                },
+                            });\n`
+                );
+                if (!('_defineComponent' in imports)) {
+                    s.prepend(`import { defineComponent as _defineComponent } from '@prang/core/runtime';\n`);
+                    imports['_defineComponent'] = {
+                        imported: 'defineComponent',
+                        isType: false,
+                        local: '_defineComponent',
+                        source: '@prang/core/runtime',
+                        specifier: {} as any
+                    };
                 }
             };
 
             walkAST(ast, {
                 enter(node) {
-                    if (node.type === 'ClassDeclaration') {
+                    if (node.type === 'ImportDeclaration') {
+                        walkImportDeclaration(imports, node);
+                    } else if (node.type === 'ClassDeclaration') {
                         classDeclarationIndex++;
                         const scopeHash = getHash(id + '#' + classDeclarationIndex);
                         const compMeta = ComponentMap.get(scopeHash);
@@ -83,8 +96,6 @@ export function ComponentTransformPlugin(): Plugin {
                     }
                 }
             });
-
-            await Promise.allSettled(promises);
 
             return {
                 code: s.toString(),

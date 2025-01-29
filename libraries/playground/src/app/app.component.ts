@@ -9,6 +9,7 @@ import ButtonComponent from './button/button.component';
 })
 export class AppComponent {
     value = signal(0);
+    text = signal('test')
 
     computed = computed(() => this.value() * 10);
 

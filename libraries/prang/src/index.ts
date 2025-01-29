@@ -1,10 +1,11 @@
-import { shallowRef, computed as vComputed } from 'vue';
+import { ReactiveFlags, shallowRef, computed as vComputed } from '@vue/reactivity';
 
 export { bootstrapComponent } from './app';
 export { Component } from './component';
 export { Pipe } from './pipe';
 
-export const signal = <T>(initialValue: T) => {
+export type Signal<T> = () => T & { set: (value: T) => void; update: (original: T) => T };
+export const signal = <T>(initialValue: T): Signal<T> => {
     const r = shallowRef(initialValue);
     const s = () => r.value;
     s.set = (value: T) => {
@@ -13,6 +14,19 @@ export const signal = <T>(initialValue: T) => {
     s.update = (updater: (original: T) => T) => {
         r.value = updater(r.value);
     };
+    Object.defineProperty(s, 'value', {
+        enumerable: true,
+        configurable: true,
+        get() {
+            return r.value;
+        },
+        set(value) {
+            r.value = value;
+        }
+    });
+    s[ReactiveFlags.IS_REF] = true;
+    s[ReactiveFlags.IS_SHALLOW] = true;
+
     return s;
 };
 
