@@ -1,6 +1,5 @@
 import {
     baseCompile,
-    baseParse,
     BindingTypes,
     buildDirectiveArgs,
     buildProps,
@@ -15,6 +14,7 @@ import MagicString from 'magic-string';
 import { parse } from 'node:path';
 import { type Plugin } from 'vite';
 import { ComponentMap } from '../../internal';
+import { baseParse } from '../../template/parse';
 import { parseTemplateRequest } from '../../utils';
 import { transformModel } from './vModel';
 
@@ -59,16 +59,15 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
 
     const meta = ComponentMap.get(scopeId);
 
-    baseParse(code, {
+    const parsed = baseParse(code, {
         compatConfig: { COMPILER_FILTERS: true }
     });
-    const result = baseCompile(code, {
+    const result = baseCompile(parsed, {
         inline: false,
         mode: 'module',
         compatConfig: { COMPILER_FILTERS: true },
         scopeId,
         filename,
-        bindingMetadata: { text: BindingTypes.SETUP_MAYBE_REF },
         runtimeModuleName: '@prang/core/runtime',
         directiveTransforms: { model: transformModel },
         nodeTransforms: [
@@ -82,7 +81,7 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
                                 : undefined;
                         const vnode = createVNodeCall(
                             ctx,
-                            node.tag + '.comp()',
+                            node.tag + '.comp',
                             props.props,
                             node.children,
                             props.patchFlag === 0 ? undefined : props.patchFlag,

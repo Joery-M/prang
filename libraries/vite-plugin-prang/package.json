@@ -33,6 +33,7 @@
         "@vue/compiler-core": "^3.5.13",
         "@vue/compiler-sfc": "^3.5.13",
         "@vue/runtime-dom": "^3.5.13",
+        "@vue/shared": "^3.5.13",
         "ast-kit": "^1.4.0",
         "dedent": "^1.5.3",
         "entities": "^6.0.0",

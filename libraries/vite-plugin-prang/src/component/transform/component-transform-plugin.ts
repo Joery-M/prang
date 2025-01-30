@@ -58,8 +58,8 @@ export function ComponentTransformPlugin(): Plugin {
                     : this.getFileName(compMeta.sourceId);
                 s.appendRight(
                     (body.end ?? 1) - 1,
-                    dedent`
-                        static comp = () => 
+                    dedent`\n
+                        static comp =
                             this.compInstance ||
                             (this.compInstance = {
                                 __name: ${JSON.stringify(componentName)},

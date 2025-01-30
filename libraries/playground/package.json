@@ -7,7 +7,7 @@
   },
   "devDependencies": {
     "vite": "^6.0.7",
-    "vite-plugin-inspect": "^10.0.6",
+    "vite-plugin-inspect": "^10.1.0",
     "vite-plugin-prang": "workspace:^"
   },
   "dependencies": {

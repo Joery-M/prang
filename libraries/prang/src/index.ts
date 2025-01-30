@@ -4,7 +4,12 @@ export { bootstrapComponent } from './app';
 export { Component } from './component';
 export { Pipe } from './pipe';
 
-export type Signal<T> = () => T & { set: (value: T) => void; update: (original: T) => T };
+export type Signal<T> = {
+    set: (value: T) => void;
+    update: (updater: (original: T) => T) => void;
+    (): T;
+};
+
 export const signal = <T>(initialValue: T): Signal<T> => {
     const r = shallowRef(initialValue);
     const s = () => r.value;
