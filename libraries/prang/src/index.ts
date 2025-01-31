@@ -4,7 +4,7 @@ export { bootstrapComponent } from './app';
 export { Component } from './component';
 export { Pipe } from './pipe';
 
-export type Signal<T> = {
+export type Signal<T = any> = {
     set: (value: T) => void;
     update: (updater: (original: T) => T) => void;
     (): T;
@@ -31,6 +31,7 @@ export const signal = <T>(initialValue: T): Signal<T> => {
     });
     s[ReactiveFlags.IS_REF] = true;
     s[ReactiveFlags.IS_SHALLOW] = true;
+    s['__v_isSignal'] = true;
 
     return s;
 };

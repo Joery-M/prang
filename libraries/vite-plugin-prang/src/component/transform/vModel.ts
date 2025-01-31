@@ -1,5 +1,4 @@
 import {
-    BindingTypes,
     ConstantTypes,
     createCompilerError,
     createCompoundExpression,
@@ -7,23 +6,38 @@ import {
     createSimpleExpression,
     ElementTypes,
     ErrorCodes,
+    findDir,
+    findProp,
+    hasDynamicKeyVBind,
     hasScopeRef,
     IS_REF,
     isMemberExpression,
     isSimpleIdentifier,
+    isStaticArgOf,
     isStaticExp,
     NodeTypes,
     type DirectiveTransform,
     type ExpressionNode,
     type Property
 } from '@vue/compiler-core';
+import {
+    DOMErrorCodes,
+    V_MODEL_CHECKBOX,
+    V_MODEL_DYNAMIC,
+    V_MODEL_RADIO,
+    V_MODEL_SELECT,
+    V_MODEL_TEXT
+} from '@vue/compiler-dom';
+import { BindingTypes } from './template-transform-plugin';
+
+const __DEV__ = true;
 
 const camelizeRE = /-(\w)/g;
 const camelize = (str: string) => {
     return str.replace(camelizeRE, (_, c) => (c ? c.toUpperCase() : ''));
 };
 
-export const transformModel: DirectiveTransform = (dir, node, context) => {
+const baseTransformModel: DirectiveTransform = (dir, node, context) => {
     const { exp, arg } = dir;
     if (!exp) {
         context.onError(createCompilerError(ErrorCodes.X_V_MODEL_NO_EXPRESSION, dir.loc));
@@ -37,7 +51,7 @@ export const transformModel: DirectiveTransform = (dir, node, context) => {
 
     // im SFC <script setup> inline mode, the exp may have been transformed into
     // _unref(exp)
-    const bindingType = context.bindingMetadata[rawExp];
+    const bindingType = context.bindingMetadata[rawExp] as BindingTypes;
 
     // check props
     if (bindingType === BindingTypes.PROPS || bindingType === BindingTypes.PROPS_ALIASED) {
@@ -68,6 +82,8 @@ export const transformModel: DirectiveTransform = (dir, node, context) => {
         : `onUpdate:modelValue`;
 
     let assignmentExp: ExpressionNode;
+    let getExp: ExpressionNode | undefined;
+
     const eventArg = context.isTS ? `($event: any)` : `$event`;
     if (maybeRef) {
         if (bindingType === BindingTypes.SETUP_REF) {
@@ -88,12 +104,13 @@ export const transformModel: DirectiveTransform = (dir, node, context) => {
             ]);
         }
     } else {
-        assignmentExp = createCompoundExpression([`${eventArg} => ((`, exp, `) = $event)`]);
+        assignmentExp = createCompoundExpression([`${eventArg} => (`, exp, `.set($event))`]);
+        getExp = createCompoundExpression([exp, '()'], exp.loc);
     }
 
     const props = [
         // modelValue: foo
-        createObjectProperty(propName, createCompoundExpression([dir.exp!, '.value'])),
+        createObjectProperty(propName, getExp ?? dir.exp!),
         // "onUpdate:modelValue": $event => (foo = $event)
         createObjectProperty(eventName, assignmentExp)
     ];
@@ -133,3 +150,85 @@ export const transformModel: DirectiveTransform = (dir, node, context) => {
 function createTransformProps(props: Property[] = []) {
     return { props };
 }
+
+export const transformModel: DirectiveTransform = (dir, node, context) => {
+    const baseResult = baseTransformModel(dir, node, context);
+    // base transform has errors OR component v-model (only need props)
+    if (!baseResult.props.length || node.tagType === ElementTypes.COMPONENT) {
+        return baseResult;
+    }
+
+    if (dir.arg) {
+        context.onError(createCompilerError(DOMErrorCodes.X_V_MODEL_ARG_ON_ELEMENT, dir.arg.loc));
+    }
+
+    function checkDuplicatedValue() {
+        const value = findDir(node, 'bind');
+        if (value && isStaticArgOf(value.arg, 'value')) {
+            context.onError(createCompilerError(DOMErrorCodes.X_V_MODEL_UNNECESSARY_VALUE, value.loc));
+        }
+    }
+
+    const { tag } = node;
+    const isCustomElement = context.isCustomElement(tag);
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || isCustomElement) {
+        let directiveToUse = V_MODEL_TEXT;
+        let isInvalidType = false;
+        if (tag === 'input' || isCustomElement) {
+            const type = findProp(node, `type`);
+            if (type) {
+                if (type.type === NodeTypes.DIRECTIVE) {
+                    // :type="foo"
+                    directiveToUse = V_MODEL_DYNAMIC;
+                } else if (type.value) {
+                    switch (type.value.content) {
+                        case 'radio':
+                            directiveToUse = V_MODEL_RADIO;
+                            break;
+                        case 'checkbox':
+                            directiveToUse = V_MODEL_CHECKBOX;
+                            break;
+                        case 'file':
+                            isInvalidType = true;
+                            context.onError(
+                                createCompilerError(DOMErrorCodes.X_V_MODEL_ON_FILE_INPUT_ELEMENT, dir.loc)
+                            );
+                            break;
+                        default:
+                            // text type
+                            __DEV__ && checkDuplicatedValue();
+                            break;
+                    }
+                }
+            } else if (hasDynamicKeyVBind(node)) {
+                // element has bindings with dynamic keys, which can possibly contain
+                // "type".
+                directiveToUse = V_MODEL_DYNAMIC;
+            } else {
+                // text type
+                __DEV__ && checkDuplicatedValue();
+            }
+        } else if (tag === 'select') {
+            directiveToUse = V_MODEL_SELECT;
+        } else {
+            // textarea
+            __DEV__ && checkDuplicatedValue();
+        }
+        // inject runtime directive
+        // by returning the helper symbol via needRuntime
+        // the import will replaced a resolveDirective call.
+        if (!isInvalidType) {
+            baseResult.needRuntime = context.helper(directiveToUse);
+        }
+    } else {
+        context.onError(createCompilerError(DOMErrorCodes.X_V_MODEL_ON_INVALID_ELEMENT, dir.loc));
+    }
+
+    // native vmodel doesn't need the `modelValue` props since they are also
+    // passed to the runtime as `binding.value`. removing it reduces code size.
+    baseResult.props = baseResult.props.filter(
+        (p) => !(p.key.type === NodeTypes.SIMPLE_EXPRESSION && p.key.content === 'modelValue')
+    );
+
+    return baseResult;
+};

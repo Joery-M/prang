@@ -1,6 +1,4 @@
 import {
-    baseCompile,
-    BindingTypes,
     buildDirectiveArgs,
     buildProps,
     createArrayExpression,
@@ -8,15 +6,66 @@ import {
     ElementTypes,
     getVNodeHelper,
     NodeTypes,
-    type DirectiveArguments
+    type DirectiveArguments,
+    type RootNode,
+    type TemplateChildNode,
+    type TransformContext
 } from '@vue/compiler-core';
+import { compileTemplate as sfcCompileTemplate } from '@vue/compiler-sfc';
 import MagicString from 'magic-string';
 import { parse } from 'node:path';
 import { type Plugin } from 'vite';
-import { ComponentMap } from '../../internal';
+import { ComponentMap, type ComponentMeta } from '../../internal';
 import { baseParse } from '../../template/parse';
 import { parseTemplateRequest } from '../../utils';
 import { transformModel } from './vModel';
+
+export enum BindingTypes {
+    /**
+     * returned from data()
+     */
+    DATA = 'data',
+    /**
+     * declared as a prop
+     */
+    PROPS = 'props',
+    /**
+     * a local alias of a `<script setup>` destructured prop.
+     * the original is stored in __propsAliases of the bindingMetadata object.
+     */
+    PROPS_ALIASED = 'props-aliased',
+    /**
+     * a let binding (may or may not be a ref)
+     */
+    SETUP_LET = 'setup-let',
+    /**
+     * a const binding that can never be a ref.
+     * these bindings don't need `unref()` calls when processed in inlined
+     * template expressions.
+     */
+    SETUP_CONST = 'setup-const',
+    /**
+     * a const binding that does not need `unref()`, but may be mutated.
+     */
+    SETUP_REACTIVE_CONST = 'setup-reactive-const',
+    /**
+     * a const binding that may be a ref.
+     */
+    SETUP_MAYBE_REF = 'setup-maybe-ref',
+    /**
+     * bindings that are guaranteed to be refs
+     */
+    SETUP_REF = 'setup-ref',
+    /**
+     * declared by other options, e.g. computed, inject
+     */
+    OPTIONS = 'options',
+    /**
+     * a literal constant, e.g. 'foo', 1, true
+     */
+    LITERAL_CONST = 'literal-const',
+    SIGNAL = 'setup-signal'
+}
 
 export function TemplateTransformPlugin(): Plugin {
     return {
@@ -55,55 +104,31 @@ export function TemplateTransformPlugin(): Plugin {
 
 function compileTemplate(code: string, path: string, scopeId: string, ssr: boolean) {
     const filename = parse(path).name + parse(path).ext;
-    const s = new MagicString(code, { filename });
 
     const meta = ComponentMap.get(scopeId);
 
     const parsed = baseParse(code, {
         compatConfig: { COMPILER_FILTERS: true }
     });
-    const result = baseCompile(parsed, {
-        inline: false,
-        mode: 'module',
-        compatConfig: { COMPILER_FILTERS: true },
-        scopeId,
+    const result = sfcCompileTemplate({
         filename,
-        runtimeModuleName: '@prang/core/runtime',
-        directiveTransforms: { model: transformModel },
-        nodeTransforms: [
-            (node, ctx) => {
-                if (node.type == NodeTypes.ELEMENT && node.tagType == ElementTypes.COMPONENT) {
-                    if (meta?.imports && meta.imports.some((imp) => imp.local == node.tag)) {
-                        const props = buildProps(node, ctx, undefined, true, false);
-                        const directives =
-                            props.directives && props.directives.length
-                                ? createArrayExpression(props.directives.map((dir) => buildDirectiveArgs(dir, ctx)))
-                                : undefined;
-                        const vnode = createVNodeCall(
-                            ctx,
-                            node.tag + '.comp',
-                            props.props,
-                            node.children,
-                            props.patchFlag === 0 ? undefined : props.patchFlag,
-                            stringifyDynamicPropNames(props.dynamicPropNames),
-                            directives as DirectiveArguments | undefined,
-                            !!props.shouldUseBlock,
-                            false,
-                            true,
-                            node.loc
-                        );
-                        ctx.helper(getVNodeHelper(ctx.inSSR, true));
-                        ctx.replaceNode(vnode as any);
-                    }
-                }
-            }
-        ],
-        hoistStatic: true,
-        inSSR: ssr
+        id: path,
+        source: code,
+        ast: parsed,
+        compilerOptions: {
+            mode: 'module',
+            inline: false,
+            parseMode: 'base',
+            inSSR: ssr,
+            hoistStatic: true,
+            runtimeModuleName: '@prang/core/runtime',
+            cacheHandlers: false,
+            directiveTransforms: { model: transformModel },
+            scopeId,
+            nodeTransforms: [importedComponentTransform(meta)]
+        }
     });
-
-    s.remove(0, code.length);
-    s.append(result.code);
+    const s = new MagicString(result.code, { filename });
 
     if (meta?.imports) {
         meta.imports.forEach((imp) => {
@@ -117,7 +142,36 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
 
     return {
         code: s.toString(),
-        map: s.generateMap({ includeContent: true })
+        map: s.generateMap()
+    };
+}
+
+function importedComponentTransform(meta?: ComponentMeta) {
+    return (node: RootNode | TemplateChildNode, ctx: TransformContext) => {
+        if (node.type == NodeTypes.ELEMENT && node.tagType == ElementTypes.COMPONENT) {
+            if (meta?.imports && meta.imports.some((imp) => imp.local == node.tag)) {
+                const props = buildProps(node, ctx, undefined, true, false);
+                const directives =
+                    props.directives && props.directives.length
+                        ? createArrayExpression(props.directives.map((dir) => buildDirectiveArgs(dir, ctx)))
+                        : undefined;
+                const vnode = createVNodeCall(
+                    ctx,
+                    node.tag + '.comp',
+                    props.props,
+                    node.children,
+                    props.patchFlag === 0 ? undefined : props.patchFlag,
+                    stringifyDynamicPropNames(props.dynamicPropNames),
+                    directives as DirectiveArguments | undefined,
+                    !!props.shouldUseBlock,
+                    false,
+                    true,
+                    node.loc
+                );
+                ctx.helper(getVNodeHelper(ctx.inSSR, true));
+                ctx.replaceNode(vnode as any);
+            }
+        }
     };
 }
 

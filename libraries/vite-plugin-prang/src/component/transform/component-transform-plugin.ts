@@ -66,7 +66,8 @@ export function ComponentTransformPlugin(): Plugin {
                                 __file: ${JSON.stringify(compMeta.sourceId)},
                                 setup: (__props) => {
                                     const instance = new this();
-                                    return (ctx, cache) => __render_${classDeclarationIndex}(instance, cache, __props, instance, instance);
+                                    const wrapped = _wrapReactiveClass(instance)
+                                    return (ctx, cache) => __render_${classDeclarationIndex}(instance, cache, __props, wrapped);
                                 },
                             });\n`
                 );
@@ -76,6 +77,16 @@ export function ComponentTransformPlugin(): Plugin {
                         imported: 'defineComponent',
                         isType: false,
                         local: '_defineComponent',
+                        source: '@prang/core/runtime',
+                        specifier: {} as any
+                    };
+                }
+                if (!('_wrapReactiveClass' in imports)) {
+                    s.prepend(`import { wrapReactiveClass as _wrapReactiveClass } from '@prang/core/runtime';\n`);
+                    imports['_wrapReactiveClass'] = {
+                        imported: 'wrapReactiveClass',
+                        isType: false,
+                        local: '_wrapReactiveClass',
                         source: '@prang/core/runtime',
                         specifier: {} as any
                     };

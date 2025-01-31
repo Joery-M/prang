@@ -235,7 +235,6 @@ const tokenizer = new Tokenizer(stack, {
                 loc: getLoc(start)
             };
         } else {
-            console.log(raw, name);
             currentProp = {
                 type: NodeTypes.DIRECTIVE,
                 name,
