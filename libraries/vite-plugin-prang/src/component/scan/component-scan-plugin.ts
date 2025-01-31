@@ -150,6 +150,7 @@ export function ComponentScanPlugin(): Plugin {
                                         meta = {
                                             ...newMeta,
                                             sourceId: id,
+                                            className: node.id ? resolveIdentifier(node.id)[0] : undefined,
                                             span: { start: node.start!, end: node.end! }
                                         };
                                     }

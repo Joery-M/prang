@@ -58,22 +58,27 @@ export function ComponentTransformPlugin(): Plugin {
                     ? resolveIdentifier(node.id)[0]
                     : this.getFileName(compMeta.sourceId);
 
+                const allComponents = Array.from(ComponentMap.values());
+                const importedComponents = (compMeta.imports ?? []).map((binding) => {
+                    allComponents.find((comp) => {
+                        binding.imported === comp.
+                    })
+                });
                 s.appendRight(
                     (body.end ?? 1) - 1,
                     dedent`\n
-                        static comp =
-                            this.compInstance ||
-                            (this.compInstance = {
-                                __name: ${JSON.stringify(componentName)},
-                                __file: ${JSON.stringify(
-                                    relative(this.environment.config.root, compMeta.sourceId).replace(/\\/g, '/')
-                                )},
-                                setup: (__props) => {
-                                    const instance = new this();
-                                    const wrapped = _wrapReactiveClass(instance)
-                                    return (ctx, cache) => __render_${classDeclarationIndex}(instance, cache, __props, wrapped);
-                                },
-                            });\n`
+                        static __vccOpts = {
+                            __name: ${JSON.stringify(componentName)},
+                            __file: ${JSON.stringify(
+                                relative(this.environment.config.root, compMeta.sourceId).replace(/\\/g, '/')
+                            )},
+                            components: {},
+                            setup: (__props) => {
+                                const instance = new this();
+                                const wrapped = _wrapReactiveClass(instance)
+                                return (ctx, cache) => __render_${classDeclarationIndex}(instance, cache, __props, wrapped);
+                            },
+                        };\n`
                 );
                 if (!('_defineComponent' in imports)) {
                     s.prepend(`import { defineComponent as _defineComponent } from '@prang/core/runtime';\n`);

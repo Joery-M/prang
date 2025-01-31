@@ -167,7 +167,7 @@ function importedComponentTransform(meta?: ComponentMeta) {
 
                 const vnode = createVNodeCall(
                     ctx,
-                    node.tag + '.comp',
+                    node.tag,
                     props.props,
                     node.children.length > 0 ? node.children : undefined,
                     props.patchFlag === 0 ? undefined : props.patchFlag,
