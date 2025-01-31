@@ -5,6 +5,6 @@ import { prang } from 'vite-plugin-prang';
 
 export default defineConfig(() => {
     return {
-        plugins: [inspect(), prang()]
+        plugins: [inspect({ build: true }), prang()]
     };
 });

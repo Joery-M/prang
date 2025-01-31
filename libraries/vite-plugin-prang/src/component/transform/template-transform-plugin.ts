@@ -76,18 +76,19 @@ export function TemplateTransformPlugin(): Plugin {
                 return id;
             }
         },
-
         load(id, options) {
             const request = parseTemplateRequest(id);
             if (!request?.query.prang || !request.query.inline) return;
             const meta = ComponentMap.get(request.query.scopeId!);
 
             const templateString = meta?.template ?? '';
+            const isProd = this.environment.mode === 'build';
             const result = compileTemplate(
                 templateString,
                 request.filename,
                 request.query.scopeId!,
-                options?.ssr ?? false
+                options?.ssr ?? false,
+                isProd
             );
 
             return result;
@@ -95,14 +96,21 @@ export function TemplateTransformPlugin(): Plugin {
         transform(code, id, options) {
             const request = parseTemplateRequest(id);
             if (!request?.query.prang || request.query.inline) return;
-            const result = compileTemplate(code, request.filename, request.query.scopeId!, options?.ssr ?? false);
+            const isProd = this.environment.mode === 'build';
+            const result = compileTemplate(
+                code,
+                request.filename,
+                request.query.scopeId!,
+                options?.ssr ?? false,
+                isProd
+            );
 
             return result;
         }
     };
 }
 
-function compileTemplate(code: string, path: string, scopeId: string, ssr: boolean) {
+function compileTemplate(code: string, path: string, scopeId: string, ssr: boolean, isProd: boolean) {
     const filename = parse(path).name + parse(path).ext;
 
     const meta = ComponentMap.get(scopeId);
@@ -115,6 +123,7 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
         id: path,
         source: code,
         ast: parsed,
+        isProd: true,
         compilerOptions: {
             mode: 'module',
             inline: false,
@@ -155,11 +164,12 @@ function importedComponentTransform(meta?: ComponentMeta) {
                     props.directives && props.directives.length
                         ? createArrayExpression(props.directives.map((dir) => buildDirectiveArgs(dir, ctx)))
                         : undefined;
+
                 const vnode = createVNodeCall(
                     ctx,
                     node.tag + '.comp',
                     props.props,
-                    node.children,
+                    node.children.length > 0 ? node.children : undefined,
                     props.patchFlag === 0 ? undefined : props.patchFlag,
                     stringifyDynamicPropNames(props.dynamicPropNames),
                     directives as DirectiveArguments | undefined,
@@ -176,6 +186,9 @@ function importedComponentTransform(meta?: ComponentMeta) {
 }
 
 function stringifyDynamicPropNames(props: string[]) {
+    if (props.length == 0) {
+        return undefined;
+    }
     let propsNamesString = `[`;
     for (let i = 0, l = props.length; i < l; i++) {
         propsNamesString += JSON.stringify(props[i]);

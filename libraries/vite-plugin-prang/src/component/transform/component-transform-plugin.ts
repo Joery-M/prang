@@ -6,6 +6,7 @@ import MagicString from 'magic-string';
 import { type Plugin } from 'vite';
 import { ComponentMap, type ComponentMeta } from '../../internal';
 import { getHash, parseTemplateRequest } from '../../utils';
+import { relative } from 'node:path';
 
 export function ComponentTransformPlugin(): Plugin {
     return {
@@ -56,6 +57,7 @@ export function ComponentTransformPlugin(): Plugin {
                     : node.id
                     ? resolveIdentifier(node.id)[0]
                     : this.getFileName(compMeta.sourceId);
+
                 s.appendRight(
                     (body.end ?? 1) - 1,
                     dedent`\n
@@ -63,7 +65,9 @@ export function ComponentTransformPlugin(): Plugin {
                             this.compInstance ||
                             (this.compInstance = {
                                 __name: ${JSON.stringify(componentName)},
-                                __file: ${JSON.stringify(compMeta.sourceId)},
+                                __file: ${JSON.stringify(
+                                    relative(this.environment.config.root, compMeta.sourceId).replace(/\\/g, '/')
+                                )},
                                 setup: (__props) => {
                                     const instance = new this();
                                     const wrapped = _wrapReactiveClass(instance)
