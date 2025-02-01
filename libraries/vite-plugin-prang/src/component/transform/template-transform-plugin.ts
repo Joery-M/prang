@@ -1,19 +1,16 @@
 import {
-    buildDirectiveArgs,
-    buildProps,
-    createArrayExpression,
-    createVNodeCall,
     ElementTypes,
-    getVNodeHelper,
+    isCoreComponent,
     NodeTypes,
-    type DirectiveArguments,
+    type ComponentNode,
     type RootNode,
     type TemplateChildNode,
     type TransformContext
 } from '@vue/compiler-core';
 import { compileTemplate as sfcCompileTemplate } from '@vue/compiler-sfc';
-import MagicString from 'magic-string';
 import { parse } from 'node:path';
+import { type SourceMapInput } from 'rollup';
+import { kebabCase } from 'scule';
 import { type Plugin } from 'vite';
 import { ComponentMap, type ComponentMeta } from '../../internal';
 import { baseParse } from '../../template/parse';
@@ -78,15 +75,15 @@ export function TemplateTransformPlugin(): Plugin {
         },
         load(id, options) {
             const request = parseTemplateRequest(id);
-            if (!request?.query.prang || !request.query.inline) return;
-            const meta = ComponentMap.get(request.query.scopeId!);
+            if (!request?.query.prang || !request.query.inline || !request.query.scopeId) return;
+            const meta = ComponentMap.get(request.query.scopeId);
 
             const templateString = meta?.template ?? '';
             const isProd = this.environment.mode === 'build';
             const result = compileTemplate(
                 templateString,
                 request.filename,
-                request.query.scopeId!,
+                request.query.scopeId,
                 options?.ssr ?? false,
                 isProd
             );
@@ -125,6 +122,7 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
         ast: parsed,
         isProd: true,
         compilerOptions: {
+            sourceMap: true,
             mode: 'module',
             inline: false,
             parseMode: 'base',
@@ -137,62 +135,43 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
             nodeTransforms: [importedComponentTransform(meta)]
         }
     });
-    const s = new MagicString(result.code, { filename });
-
-    if (meta?.imports) {
-        meta.imports.forEach((imp) => {
-            if (imp.isType) return;
-
-            if (imp.imported === 'default') {
-                s.prepend(`import ${imp.local} from ${JSON.stringify(imp.source)};\n`);
-            } else s.prepend(`import {${imp.imported} as ${imp.local}} from ${JSON.stringify(imp.source)};\n`);
-        });
-    }
 
     return {
-        code: s.toString(),
-        map: s.generateMap()
+        code: result.code,
+        map: result.map! as SourceMapInput
     };
 }
 
 function importedComponentTransform(meta?: ComponentMeta) {
-    return (node: RootNode | TemplateChildNode, ctx: TransformContext) => {
-        if (node.type == NodeTypes.ELEMENT && node.tagType == ElementTypes.COMPONENT) {
-            if (meta?.imports && meta.imports.some((imp) => imp.local == node.tag)) {
-                const props = buildProps(node, ctx, undefined, true, false);
-                const directives =
-                    props.directives && props.directives.length
-                        ? createArrayExpression(props.directives.map((dir) => buildDirectiveArgs(dir, ctx)))
-                        : undefined;
+    // Resolve all imported components by their selectors
+    const components = new Set<string>();
 
-                const vnode = createVNodeCall(
-                    ctx,
-                    node.tag,
-                    props.props,
-                    node.children.length > 0 ? node.children : undefined,
-                    props.patchFlag === 0 ? undefined : props.patchFlag,
-                    stringifyDynamicPropNames(props.dynamicPropNames),
-                    directives as DirectiveArguments | undefined,
-                    !!props.shouldUseBlock,
-                    false,
-                    true,
-                    node.loc
-                );
-                ctx.helper(getVNodeHelper(ctx.inSSR, true));
-                ctx.replaceNode(vnode as any);
+    const allComponents = Array.from(ComponentMap.values());
+    meta?.imports?.forEach((binding) => {
+        allComponents.find((meta) => {
+            if (meta.sourceId === binding.source) {
+                if (meta.className) {
+                    components.add(kebabCase(meta.className));
+                    components.add(meta.className);
+                }
+                if (meta.selectors) {
+                    meta.selectors.forEach((val) => {
+                        components.add(val);
+                    });
+                }
+            }
+        });
+    });
+
+    return (node: RootNode | TemplateChildNode, ctx: TransformContext) => {
+        // If the 'element' is part of our selectors, treat is as a component
+        if (node.type == NodeTypes.ELEMENT && node.tagType === ElementTypes.ELEMENT) {
+            if (!isCoreComponent(node.tag) && components.has(node.tag)) {
+                ctx.replaceNode({
+                    ...(node as unknown as ComponentNode),
+                    tagType: ElementTypes.COMPONENT
+                });
             }
         }
     };
-}
-
-function stringifyDynamicPropNames(props: string[]) {
-    if (props.length == 0) {
-        return undefined;
-    }
-    let propsNamesString = `[`;
-    for (let i = 0, l = props.length; i < l; i++) {
-        propsNamesString += JSON.stringify(props[i]);
-        if (i < l - 1) propsNamesString += ', ';
-    }
-    return propsNamesString + `]`;
 }

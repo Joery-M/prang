@@ -6,7 +6,7 @@ export interface ComponentMeta {
         start: number;
         end: number;
     };
-    selector?: string;
+    selectors?: string[];
     className?: string;
     template?: string;
     inlineTemplate?: boolean;

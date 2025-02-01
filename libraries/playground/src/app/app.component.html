@@ -1,17 +1,18 @@
-<p>{{'A'.repeat(value() + 1)}}</p>
-<div [style]="{width: '200px', height: '200px', display: 'flex','justify-content': 'center', 'align-items': 'center'}">
+<p>{{ 'A'.repeat(value() + 1) }}</p>
+<div
+    [style]="{ width: '200px', height: '200px', display: 'flex', 'justify-content': 'center', 'align-items': 'center' }"
+>
     <p>{{ value() }} {{ computed() }}</p>
 </div>
 <button @click="value.update(v => v + 1)">Increment</button>
 <button (click)="increment()">Increment</button>
 <br />
 <br />
-<ButtonComponent/>
-<ButtonComponent/>
+<button-component />
+<button-component />
 
-<br/>
-<br/>
-
+<br />
+<br />
 
 <input type="text" v-model="text" />
 <button (click)="text.set('asdf')"></button>

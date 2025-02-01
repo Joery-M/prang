@@ -1,13 +1,12 @@
 import type { Plugin } from 'vite';
 import { ComponentScanPlugin } from './component/scan/component-scan-plugin';
-import { ComponentTransformPlugin } from './component/transform/component-transform-plugin';
 import { TemplateTransformPlugin } from './component/transform/template-transform-plugin';
 
 export function prang(): Plugin[] {
     return [
         {
             name: 'prang',
-            config(config, env) {
+            config() {
                 return {
                     optimizeDeps: {
                         include: ['@prang/core/runtime']
@@ -21,7 +20,6 @@ export function prang(): Plugin[] {
             }
         },
         ComponentScanPlugin(),
-        TemplateTransformPlugin(),
-        ComponentTransformPlugin()
+        TemplateTransformPlugin()
     ];
 }

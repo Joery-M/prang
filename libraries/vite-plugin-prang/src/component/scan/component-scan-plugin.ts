@@ -1,6 +1,16 @@
 import { parse } from '@babel/parser';
-import { isArrayExpression, type ObjectExpression } from '@babel/types';
 import {
+    isArrayExpression,
+    isCallExpression,
+    isIdentifier,
+    isImportDeclaration,
+    isObjectExpression,
+    isObjectProperty,
+    type ClassDeclaration,
+    type ObjectExpression
+} from '@babel/types';
+import {
+    isIdentifierOf,
     isLiteralType,
     resolveIdentifier,
     resolveString,
@@ -9,6 +19,7 @@ import {
     type ImportBinding
 } from 'ast-kit';
 import MagicString from 'magic-string';
+import path from 'pathe';
 import type { Plugin } from 'vite';
 import { ComponentMap, type ComponentMeta } from '../../internal';
 import { getHash } from '../../utils';
@@ -20,13 +31,12 @@ export function ComponentScanPlugin(): Plugin {
         async transform(code, id) {
             if (
                 id.includes('/node_modules/') ||
-                id.includes('inline=true') ||
+                id.includes('&inline') ||
                 !code.includes('@prang/core') ||
                 !code.includes('class')
             )
                 return;
 
-            // const ast = parseSync(id, code);
             const ast = parse(code, {
                 sourceType: 'module',
                 plugins: [
@@ -50,58 +60,88 @@ export function ComponentScanPlugin(): Plugin {
 
             const getComponentMeta = async (
                 decoratorArg: ObjectExpression,
+                classNode: ClassDeclaration,
                 id: string,
                 scopeHash: string
             ): Promise<Partial<ComponentMeta>> => {
                 const meta: Partial<ComponentMeta> = {};
+
+                // Add the file path before the first property
+                const firstProp = decoratorArg.properties[0];
+                if (isObjectProperty(firstProp)) {
+                    s.prependRight(
+                        firstProp.start!,
+                        `fileUrl: ${JSON.stringify(path.relative(this.environment.config.root, id))},\n`
+                    );
+                }
+
                 for await (const prop of decoratorArg.properties) {
-                    if (prop.type !== 'ObjectProperty' || prop.key.type !== 'Identifier') continue;
+                    if (!isObjectProperty(prop) || !isIdentifier(prop.key)) continue;
 
                     switch (prop.key.name) {
                         case 'selector': {
                             if (!isLiteralType(prop.value)) break;
-                            meta.selector = resolveString(prop.value);
+                            meta.selectors ||= [];
+                            meta.selectors.push(resolveString(prop.value));
                             break;
                         }
                         case 'templateUrl': {
                             if (!isLiteralType(prop.value)) break;
                             const tmplUrl = resolveString(prop.value);
-                            if (tmplUrl) {
-                                const resolvedId = (await this.resolve(tmplUrl, id))?.id;
-                                if (resolvedId) {
-                                    meta.template = resolvedId;
-                                }
-                            }
+                            const resolvedId = (await this.resolve(tmplUrl, id))?.id;
+                            if (!resolvedId) break;
+                            s.prependLeft(
+                                classNode.start!,
+                                `import { render as __render_${scopeHash} } from ${JSON.stringify(
+                                    resolvedId + `?prang&scopeId=${scopeHash}`
+                                )};\n`
+                            );
+                            s.update(prop.key.start!, prop.key.end!, 'render');
+                            s.update(prop.value.start!, prop.value.end!, `__render_${scopeHash}`);
+                            meta.template = resolvedId;
                             break;
                         }
                         case 'template': {
                             if (!isLiteralType(prop.value)) break;
                             const templateString = resolveString(prop.value);
 
-                            if (templateString) {
-                                // Scope ID gets added later
-                                meta.template = templateString;
-                                meta.inlineTemplate = true;
-                            }
+                            if (!templateString) break;
+                            // Change extension to .html
+                            const changedExt = path.join(
+                                path.dirname(id),
+                                path.basename(id, path.extname(id)) + '.html'
+                            );
+
+                            const tmplUrl = `${changedExt}?prang&scopeId=${scopeHash}&inline`;
+                            s.prependLeft(
+                                classNode.start!,
+                                `import { render as __render_${scopeHash} } from ${JSON.stringify(tmplUrl)};\n`
+                            );
+                            s.update(prop.key.start!, prop.key.end!, 'render');
+                            s.update(prop.value.start!, prop.value.end!, `__render_${scopeHash}`);
+                            meta.template = templateString;
+                            meta.inlineTemplate = true;
                             break;
                         }
 
                         case 'imports': {
-                            if (isArrayExpression(prop.value)) {
-                                const referencedIdentifiers = prop.value.elements.filter(
-                                    (v) => v?.type === 'Identifier'
-                                );
-                                const identifiers = referencedIdentifiers.flatMap((i) => resolveIdentifier(i));
+                            if (!isArrayExpression(prop.value)) break;
+                            const referencedIdentifiers = prop.value.elements.filter((v) => v?.type === 'Identifier');
+                            const identifiers = referencedIdentifiers.flatMap((i) => resolveIdentifier(i));
 
-                                meta.imports = await Promise.all(
-                                    Object.values(imports)
-                                        .filter((imp) => identifiers?.includes(imp.local))
-                                        .map(async (im) => {
-                                            im.source = (await this.resolve(im.source, id))?.id ?? im.source;
-                                            return im;
-                                        })
-                                );
-                            }
+                            meta.imports = await Promise.all(
+                                Object.values(imports)
+                                    .filter((imp) => identifiers?.includes(imp.local))
+                                    .map(async (im) => {
+                                        const resolved = await this.resolve(im.source, id);
+                                        im.source = resolved?.id ?? im.source;
+                                        if (resolved) {
+                                            // Load imports
+                                            await this.load({ ...resolved, resolveDependencies: true });
+                                        }
+                                        return im;
+                                    })
+                            );
                             break;
                         }
 
@@ -121,11 +161,9 @@ export function ComponentScanPlugin(): Plugin {
                         }
                         case 'ImportSpecifier': {
                             if (
-                                parent &&
-                                parent.type === 'ImportDeclaration' &&
+                                isImportDeclaration(parent) &&
                                 parent.source.value === '@prang/core' &&
-                                node.imported.type === 'Identifier' &&
-                                node.imported.name === 'Component'
+                                isIdentifierOf(node.imported, 'Component')
                             ) {
                                 componentIdent = node.local.name;
                             }
@@ -136,16 +174,17 @@ export function ComponentScanPlugin(): Plugin {
                             if (!node.decorators || node.decorators.length == 0) return;
                             for await (const decorator of node.decorators) {
                                 if (
-                                    decorator.expression.type !== 'CallExpression' ||
-                                    decorator.expression.callee.type !== 'Identifier' ||
-                                    decorator.expression.callee.name !== componentIdent
+                                    !isCallExpression(decorator.expression) ||
+                                    !isIdentifierOf(decorator.expression.callee, componentIdent)
                                 )
                                     continue;
+
                                 let meta: ComponentMeta | undefined;
                                 const scopeHash = getHash(id + '#' + classDeclarationIndex);
+
                                 for (const arg of decorator.expression.arguments) {
-                                    if (arg.type !== 'ObjectExpression') continue;
-                                    const newMeta = await getComponentMeta(arg, id, scopeHash);
+                                    if (!isObjectExpression(arg)) continue;
+                                    const newMeta = await getComponentMeta(arg, node, id, scopeHash);
                                     if (newMeta) {
                                         meta = {
                                             ...newMeta,
@@ -155,8 +194,6 @@ export function ComponentScanPlugin(): Plugin {
                                         };
                                     }
                                 }
-
-                                s.remove(decorator.start!, decorator.end!);
 
                                 if (meta) {
                                     ComponentMap.set(scopeHash, meta);
