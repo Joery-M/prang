@@ -1,13 +1,16 @@
-import { kebabCase } from 'scule';
-import type { ComponentOptions } from 'vue';
-import { onBeforeUnmount, onMounted, wrapReactiveClass } from './runtime';
+import {
+    CLASS_COMPONENT,
+    PIPE,
+    resolveSelector,
+    type AnyClassImport,
+    type ClassComponent,
+    type ClassPipe
+} from './internal';
+import { createCommentVNode, onBeforeUnmount, onMounted, wrapReactiveClass } from './runtime';
 
-export const CLASS_COMPONENT = Symbol();
-export const PIPE = Symbol();
-
-export function Component(m: ComponentMeta): Function {
-    const meta = m as ProcessedComponentMeta;
-    if (!meta.render) return Function();
+export function Component(m?: ComponentMeta): Function {
+    const meta = (m ?? { fileUrl: 'Unknown', render: () => createCommentVNode() }) as ProcessedComponentMeta;
+    if (!meta?.render) return Function();
 
     const components = new Map<string, ClassComponent>();
     const filters = new Map<string, ClassPipe>();
@@ -26,7 +29,7 @@ export function Component(m: ComponentMeta): Function {
     });
 
     return (component: ClassComponent) => {
-        const componentName = meta.selector ?? component.name;
+        const componentName = [meta.selector].flat()[0] ?? component.name;
         component.__vType = CLASS_COMPONENT;
         component.__vSelector = meta.selector;
 
@@ -55,11 +58,8 @@ export function Component(m: ComponentMeta): Function {
     };
 }
 
-type Arrayable<T> = T | T[];
-export type AnyClassImport = Arrayable<ClassComponent | ClassPipe>;
-
 export interface ComponentMeta {
-    selector?: string;
+    selector?: string | string[];
     templateUrl?: string;
     template?: string;
     styleUrls?: string[];
@@ -67,40 +67,13 @@ export interface ComponentMeta {
     imports?: readonly AnyClassImport[];
     providers?: readonly any[];
 }
+
+/**
+ * Component decorator argument after being processed by the vite plugin
+ */
 interface ProcessedComponentMeta extends ComponentMeta {
-    templateUrl: never;
-    template: never;
+    templateUrl?: never;
+    template?: never;
     render: Function;
     fileUrl: string;
-}
-
-interface ClassComponent {
-    new (...args: any[]): any;
-    __vccOpts: ComponentOptions;
-    __vType?: typeof CLASS_COMPONENT;
-    __vSelector?: string;
-}
-
-interface ClassPipe {
-    new (...args: any[]): any;
-    __vType?: typeof PIPE;
-    __vSelector?: string | string[];
-}
-
-function resolveSelector(value: ClassComponent | ClassPipe) {
-    const map = new Map<string, ClassComponent | ClassPipe>();
-
-    if (Array.isArray(value.__vSelector)) {
-        for (const selector of value.__vSelector) {
-            map.set(selector, value);
-        }
-    } else if (value.__vSelector) {
-        map.set(value.__vSelector, value);
-    } else {
-        // Accept both versions: `my-component`
-        map.set(kebabCase(value.name), value);
-        // and `MyComponent`
-        map.set(value.name, value);
-    }
-    return map;
 }
