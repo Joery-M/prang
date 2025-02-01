@@ -220,6 +220,8 @@ const tokenizer = new Tokenizer(stack, {
                 ? 'on'
                 : raw === '#'
                 ? 'slot'
+                : raw.startsWith('*')
+                ? raw.slice(1)
                 : raw.slice(2);
 
         if (!inVPre && name === '') {

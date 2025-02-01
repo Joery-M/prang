@@ -7,13 +7,22 @@
 <button @click="value.update(v => v + 1)">Increment</button>
 <button (click)="increment()">Increment</button>
 <br />
+<input type="range" min="0" max="100" *model.number="value" />
+
+<p *if="value() < 41">Less than 41</p>
+<p *else-if="value() == 41">Equals 41</p>
+<p *else>More than 41</p>
+
 <br />
+<br />
+
 <button-component />
 <button-component />
 
 <br />
 <br />
 
+<input type="text" *model="text" />
 <input type="text" v-model="text" />
 <button (click)="text.set('asdf')"></button>
 {{ text() }}

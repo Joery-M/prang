@@ -646,7 +646,7 @@ export default class Tokenizer {
         }
     }
     private handleAttrStart(c: number) {
-        if (c === CharCodes.LowerV && this.peek() === CharCodes.Dash) {
+        if ((c === CharCodes.LowerV && this.peek() === CharCodes.Dash) || c === CharCodes.Star) {
             this.state = State.InDirName;
             this.sectionStart = this.index;
         } else if (

@@ -9,17 +9,32 @@ export function Component(m: ComponentMeta): Function {
     const meta = m as ProcessedComponentMeta;
     if (!meta.render) return Function();
 
+    const components = new Map<string, ClassComponent>();
+    const filters = new Map<string, ClassPipe>();
+    meta.imports?.flat().forEach((imp) => {
+        const resolved = resolveSelector(imp);
+        for (const entry of resolved.entries()) {
+            switch (entry[1].__vType) {
+                case CLASS_COMPONENT:
+                    components.set(entry[0], entry[1]);
+                    break;
+                case PIPE:
+                    filters.set(entry[0], entry[1]);
+                    break;
+            }
+        }
+    });
+
     return (component: ClassComponent) => {
         const componentName = meta.selector ?? component.name;
         component.__vType = CLASS_COMPONENT;
         component.__vSelector = meta.selector;
 
-        console.log(resolveComponents(meta.imports));
         component.__vccOpts = {
             name: componentName,
             __file: meta.fileUrl,
-            components: resolveComponents(meta.imports),
-            filters: resolvePipes(meta.imports),
+            components: Object.fromEntries(components),
+            filters: Object.fromEntries(filters),
             setup(props) {
                 const instance = new component();
                 onMounted(() => {
@@ -72,41 +87,20 @@ interface ClassPipe {
     __vSelector?: string | string[];
 }
 
-function resolveComponents(imports?: readonly AnyClassImport[]) {
-    if (!imports) return {};
+function resolveSelector(value: ClassComponent | ClassPipe) {
+    const map = new Map<string, ClassComponent | ClassPipe>();
 
-    const importEntries: Record<string, ClassComponent> = {};
-
-    imports.flat().forEach((imp) => {
-        if (imp.__vType !== CLASS_COMPONENT) return;
-
-        if (Array.isArray(imp.__vSelector)) {
-            for (const selector of imp.__vSelector) {
-                importEntries[selector] = imp;
-            }
-        } else if (imp.__vSelector) {
-            importEntries[imp.__vSelector] = imp;
-        } else {
-            // Accept both versions: `my-component`
-            importEntries[kebabCase(imp.name)] = imp;
-            // and `MyComponent`
-            importEntries[imp.name] = imp;
+    if (Array.isArray(value.__vSelector)) {
+        for (const selector of value.__vSelector) {
+            map.set(selector, value);
         }
-    });
-    return importEntries;
-}
-
-function resolvePipes(imports?: readonly AnyClassImport[]) {
-    if (!imports) return {};
-
-    return Object.fromEntries(
-        imports
-            .flat()
-            .map((pipe) =>
-                !Array.isArray(pipe) && '__vType' in pipe && pipe.__vType === PIPE
-                    ? ([pipe.__vSelector ?? kebabCase(pipe.name), pipe] as const)
-                    : undefined
-            )
-            .filter((v) => !!v)
-    );
+    } else if (value.__vSelector) {
+        map.set(value.__vSelector, value);
+    } else {
+        // Accept both versions: `my-component`
+        map.set(kebabCase(value.name), value);
+        // and `MyComponent`
+        map.set(value.name, value);
+    }
+    return map;
 }
