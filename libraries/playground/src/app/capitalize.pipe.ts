@@ -1,6 +1,8 @@
 import { Pipe } from '@prang/core';
 
-@Pipe()
+@Pipe({
+    name: 'capitalize'
+})
 export class Capitalize {
     transform(value: string, lowerRest: boolean = false) {
         if (value == null) return '';

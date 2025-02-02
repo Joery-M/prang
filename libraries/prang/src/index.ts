@@ -77,7 +77,7 @@ export function viewChild<T = any>(selector: string) {
 
     const s = () => {
         const val = template.value as any;
-        return CLASS_COMPONENT in val ? (val[CLASS_COMPONENT] as T) : val;
+        return val && CLASS_COMPONENT in val ? (val[CLASS_COMPONENT] as T) : val;
     };
     s[ReactiveFlags.IS_READONLY] = true;
     s[ReactiveFlags.IS_SHALLOW] = true;

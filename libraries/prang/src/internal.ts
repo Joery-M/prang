@@ -1,4 +1,3 @@
-import { camelCase, kebabCase } from 'scule';
 import type { ComponentOptions } from 'vue';
 import type { ReadonlySignal } from '.';
 
@@ -33,13 +32,7 @@ export function resolveSelector(value: ClassComponent | ClassPipe) {
     } else if (value.__vSelector) {
         map.set(value.__vSelector, value);
     } else {
-        if (value.__vType === CLASS_COMPONENT) {
-            // Accept both versions: `my-component` and `MyComponent`
-            map.set(kebabCase(value.name), value);
-            map.set(value.name, value);
-        } else if (value.__vType === PIPE) {
-            map.set(camelCase(value.name), value);
-        }
+        console.warn('Could not find selector for', value);
     }
     return map;
 }

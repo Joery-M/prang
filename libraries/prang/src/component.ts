@@ -33,7 +33,7 @@ export function Component(m?: ComponentMeta): Function {
     });
 
     return (component: ClassComponent) => {
-        const componentName = [meta.selector].flat()[0] ?? component.name;
+        const componentName = [meta.selector].flat()[0];
         component.__vType = CLASS_COMPONENT;
         component.__vSelector = meta.selector;
 
