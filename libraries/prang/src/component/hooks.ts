@@ -1,11 +1,7 @@
 export interface OnDestroy {
-    onDestroy: () => any;
+    onDestroy(): any;
 }
 
 export interface OnInit {
-    onInit: () => any;
-}
-
-export interface AfterViewInit {
-    afterViewInit: () => any;
+    onInit(): any;
 }

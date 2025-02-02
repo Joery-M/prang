@@ -1,4 +1,3 @@
-import { watch } from '@vue/reactivity';
 import {
     CLASS_COMPONENT,
     isInput,
@@ -8,7 +7,7 @@ import {
     type ClassComponent,
     type ClassPipe
 } from './internal';
-import { createCommentVNode, onBeforeUnmount, onMounted, wrapReactiveClass, type Prop } from './runtime';
+import { createCommentVNode, onBeforeUnmount, onMounted, watch, type Prop } from './runtime';
 
 export function Component(m?: ComponentMeta): Function {
     const meta = Object.assign(
@@ -44,18 +43,12 @@ export function Component(m?: ComponentMeta): Function {
             components: Object.fromEntries(components),
             filters: Object.fromEntries(filters),
             props: meta.inputs,
-            setup(props) {
+            setup(props, { expose }) {
                 const instance = new component();
-                onMounted(() => {
-                    if ('onInit' in instance && typeof instance['onInit'] === 'function') {
-                        instance.onInit();
-                    }
-                });
-                onBeforeUnmount(() => {
-                    if ('onDestroy' in instance && typeof instance['onDestroy'] === 'function') {
-                        instance.onDestroy();
-                    }
-                });
+                if ('onInit' in instance && typeof instance['onInit'] === 'function')
+                    onMounted(() => instance.onInit());
+                if ('onDestroy' in instance && typeof instance['onDestroy'] === 'function')
+                    onBeforeUnmount(() => instance.onDestroy());
 
                 // For non-compiled props
                 watch(
@@ -73,8 +66,8 @@ export function Component(m?: ComponentMeta): Function {
                     { immediate: true }
                 );
 
-                const wrapped = wrapReactiveClass(instance);
-                return (_ctx: any, cache: any) => meta.render.call(instance, instance, cache, props, wrapped);
+                expose({ [CLASS_COMPONENT]: instance });
+                return (_ctx: any, cache: any) => meta.render.call(instance, instance, cache);
             }
         };
     };

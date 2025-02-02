@@ -1,7 +1,10 @@
 import { ReactiveFlags, shallowRef, computed as vComputed } from '@vue/reactivity';
+import { useTemplateRef } from 'vue';
+import { CLASS_COMPONENT } from './internal';
 
 export { bootstrapComponent } from './app';
 export { Component } from './component';
+export * from './component/hooks';
 export { Pipe } from './pipe';
 
 export type ReadonlySignal<T = any> = {
@@ -67,4 +70,16 @@ export function output<T extends any | readonly any[] = any>(): Output<T> {
     return (...args: T extends Array<any> ? T : [T]) => {
         // inst.emit(propName, args.flat(1));
     };
+}
+
+export function viewChild<T = any>(selector: string) {
+    const template = useTemplateRef<T>(selector);
+
+    const s = () => {
+        const val = template.value as any;
+        return CLASS_COMPONENT in val ? (val[CLASS_COMPONENT] as T) : val;
+    };
+    s[ReactiveFlags.IS_READONLY] = true;
+    s[ReactiveFlags.IS_SHALLOW] = true;
+    return s as ReadonlySignal<T | null>;
 }
