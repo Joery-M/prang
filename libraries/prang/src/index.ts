@@ -1,5 +1,4 @@
 import { ReactiveFlags, shallowRef, computed as vComputed } from '@vue/reactivity';
-import { getCurrentInstance } from 'vue';
 
 export { bootstrapComponent } from './app';
 export { Component } from './component';
@@ -49,6 +48,7 @@ export const computed = <T>(fn: () => T, opts?: ComputedOptions<T>): ReadonlySig
 };
 
 export function input<T>(): ReadonlySignal<T | undefined>;
+export function input<T>(defaultValue: T): ReadonlySignal<T>;
 export function input<T>(defaultValue?: T): ReadonlySignal<T> {
     const r = shallowRef(defaultValue);
     const s = () => r.value;

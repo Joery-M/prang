@@ -8,6 +8,7 @@ import {
     isObjectExpression,
     isObjectProperty,
     objectExpression,
+    toKeyAlias,
     type ClassDeclaration,
     type Expression,
     type ObjectExpression
@@ -180,7 +181,18 @@ export function ComponentScanPlugin(): Plugin {
                         isIdentifierOf(property.value.callee, inputIdentifier)
                     ) {
                         console.log('Input');
+                        s.overwrite(property.value.callee.start!, property.value.callee.end!, '_compiledInput');
+                        s.appendRight(
+                            (property.value.typeParameters || property.value.callee).end! + 1,
+                            JSON.stringify(toKeyAlias(property)) + (property.value.arguments.length ? ', ' : '')
+                        );
                         inputs.add(property.key);
+
+                        if (!('_compiledInput' in imports)) {
+                            s.prepend(`import { compiledInput as _compiledInput } from '@prang/core/runtime';\n`);
+                            // Not going to be used anyway
+                            imports['_compiledInput'] = {} as any;
+                        }
                     }
                     if (
                         outputIdentifier &&

@@ -45,5 +45,5 @@ export function resolveSelector(value: ClassComponent | ClassPipe) {
 }
 
 export function isInput<T>(r: ReadonlySignal<T> | unknown): r is ReadonlySignal<T> {
-    return r ? (r as any)['__v_isInput'] === true : false;
+    return r ? (r as any)['__v_isInput'] === true && !(r as any)['__v_isInputCompiled'] : false;
 }

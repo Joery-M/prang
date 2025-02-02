@@ -5,5 +5,5 @@ import { Component, input } from '@prang/core';
     template: ` <p>{{ value() }}</p> `
 })
 export default class {
-    value = input<string>();
+    value = input<string>('nothing');
 }

@@ -56,6 +56,8 @@ export function Component(m?: ComponentMeta): Function {
                         instance.onDestroy();
                     }
                 });
+
+                // For non-compiled props
                 watch(
                     props,
                     (propValues) => {

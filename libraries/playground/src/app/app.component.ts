@@ -10,7 +10,7 @@ import { Capitalize } from './capitalize.pipe';
 })
 export class AppComponent {
     value = signal(0);
-    text = signal('test');
+    text = signal(undefined);
 
     computed = computed(() => this.value() * 10);
 

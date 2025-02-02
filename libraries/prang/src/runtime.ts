@@ -1,12 +1,8 @@
+import { ReactiveFlags, computed, isProxy, isRef, ref, toRefs, toValue, watch } from '@vue/reactivity';
 import {
     camelize,
     capitalize,
     getCurrentInstance,
-    isProxy,
-    isRef,
-    ReactiveFlags,
-    shallowRef,
-    toValue,
     withDirectives as vWithDirectives,
     type ComponentOptions,
     type DirectiveArguments,
@@ -92,4 +88,24 @@ export function resolveFilter(name: string) {
 
 function resolve(registry: Record<string, any> | undefined, name: string) {
     return registry && (registry[name] || registry[camelize(name)] || registry[capitalize(camelize(name))]);
+}
+
+export function compiledInput<T>(propName: string, defaultValue?: T): ReadonlySignal<T> {
+    const inst = getCurrentInstance();
+    if (!inst) throw new Error('Compiled input was called without active instance');
+    const props = toRefs(inst.props);
+    const useDefault = ref(false);
+    if (defaultValue !== undefined) {
+        useDefault.value = true;
+        watch(props[propName], (v) => (useDefault.value = false), { once: true });
+    }
+
+    const r = computed<T>(() => (useDefault.value || !(propName in props) ? defaultValue : props[propName].value) as T);
+    const s = () => r.value;
+
+    s['__v_isInput'] = true;
+    s['__v_isInputCompiled'] = true;
+    s[ReactiveFlags.IS_READONLY] = true;
+    s[ReactiveFlags.IS_SHALLOW] = true;
+    return s;
 }
