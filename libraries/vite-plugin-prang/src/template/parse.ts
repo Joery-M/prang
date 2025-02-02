@@ -61,7 +61,7 @@ function isCompatEnabled(key: CompilerDeprecationTypes, context: MergedParserOpt
 
 const __DEV__ = true;
 const __BROWSER__ = false;
-const __COMPAT__ = false;
+const __COMPAT__ = true;
 
 function defaultOnWarn(msg: CompilerError): void {
     __DEV__ && console.warn(`[Vue warn] ${msg.message}`);

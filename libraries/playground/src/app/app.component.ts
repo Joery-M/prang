@@ -1,15 +1,15 @@
 import { Component, computed, signal } from '@prang/core';
-import './capitalize.pipe';
 import ButtonComponent from './button/button.component';
+import { Capitalize } from './capitalize.pipe';
 
 @Component({
     selector: 'app-component',
     templateUrl: './app.component.html',
-    imports: [ButtonComponent]
+    imports: [ButtonComponent, Capitalize]
 })
 export class AppComponent {
     value = signal(0);
-    text = signal('test')
+    text = signal('test');
 
     computed = computed(() => this.value() * 10);
 

@@ -1,13 +1,17 @@
 import {
     ElementTypes,
+    getBaseTransformPreset,
     isCoreComponent,
     NodeTypes,
+    generate,
+    transform,
     type ComponentNode,
     type RootNode,
     type TemplateChildNode,
     type TransformContext
 } from '@vue/compiler-core';
-import { compileTemplate as sfcCompileTemplate } from '@vue/compiler-sfc';
+import {} from '@vue/compiler-dom';
+// import { compileTemplate as sfcCompileTemplate } from '@vue/compiler-sfc';
 import { parse } from 'node:path';
 import { type SourceMapInput } from 'rollup';
 import { kebabCase } from 'scule';
@@ -15,6 +19,7 @@ import { type Plugin } from 'vite';
 import { ComponentMap, type ComponentMeta } from '../../internal';
 import { baseParse } from '../../template/parse';
 import { parseTemplateRequest } from '../../utils';
+import { transformFilter } from './transformPipe';
 import { transformModel } from './vModel';
 
 export enum BindingTypes {
@@ -112,28 +117,36 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
 
     const meta = ComponentMap.get(scopeId);
 
+    // Always required
+    const prefixIdentifiers = true;
+
+    const [nodeTransforms, directiveTransforms] = getBaseTransformPreset(prefixIdentifiers);
+
     const parsed = baseParse(code, {
-        compatConfig: { COMPILER_FILTERS: true }
+        parseMode: 'base',
+        prefixIdentifiers: true
     });
-    const result = sfcCompileTemplate({
+
+    transform(parsed, {
+        inline: false,
+        inSSR: ssr,
+        hoistStatic: true,
+        cacheHandlers: false,
+        prefixIdentifiers,
+        directiveTransforms: Object.assign({}, directiveTransforms, { model: transformModel }),
+        scopeId,
+        nodeTransforms: [transformFilter, ...nodeTransforms, importedComponentTransform(meta)]
+    });
+    const result = generate(parsed, {
         filename,
-        id: path,
-        source: code,
-        ast: parsed,
-        isProd: true,
-        compilerOptions: {
-            sourceMap: true,
-            mode: 'module',
-            inline: false,
-            parseMode: 'base',
-            inSSR: ssr,
-            hoistStatic: true,
-            runtimeModuleName: '@prang/core/runtime',
-            cacheHandlers: false,
-            directiveTransforms: { model: transformModel },
-            scopeId,
-            nodeTransforms: [importedComponentTransform(meta)]
-        }
+        ssr,
+        sourceMap: true,
+        mode: 'module',
+        prefixIdentifiers,
+        inline: false,
+        inSSR: ssr,
+        runtimeModuleName: '@prang/core/runtime',
+        scopeId
     });
 
     return {

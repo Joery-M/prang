@@ -3,6 +3,7 @@
     "type": "module",
     "exports": {
         ".": {
+            "development": "./src/index.ts",
             "import": "./dist/index.mjs",
             "types": "./dist/index.d.mts"
         }
@@ -19,6 +20,7 @@
     "devDependencies": {
         "@oxc-project/types": "^0.45.0",
         "@types/babel__core": "^7.20.5",
+        "@types/babel__generator": "^7.6.8",
         "@types/estree": "^1.0.6",
         "unbuild": "^3.3.0"
     },
@@ -28,6 +30,7 @@
     },
     "dependencies": {
         "@ampproject/remapping": "^2.3.0",
+        "@babel/generator": "^7.26.5",
         "@babel/parser": "^7.26.7",
         "@babel/types": "^7.26.7",
         "@vue/compiler-core": "^3.5.13",

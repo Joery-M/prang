@@ -1,8 +1,12 @@
 import {
+    camelize,
+    capitalize,
+    getCurrentInstance,
     isProxy,
     isRef,
     toValue,
     withDirectives as vWithDirectives,
+    type ComponentOptions,
     type DirectiveArguments,
     type VNode
 } from '@vue/runtime-core';
@@ -51,4 +55,36 @@ export function withDirectives<T extends VNode>(vnode: T, directives: DirectiveA
         }
     }
     return vWithDirectives(vnode, directives);
+}
+
+export function resolveFilter(name: string) {
+    const instance = getCurrentInstance();
+    const type = 'filters';
+    if (instance) {
+        const Component = instance.type;
+
+        let res =
+            // local registration
+            // check instance[type] first which is resolved for options API
+            resolve((instance as any)[type] || (Component as ComponentOptions)[type], name) ||
+            // global registration
+            resolve((instance.appContext as any)[type], name);
+
+        if (typeof res === 'function' && res.__vType === Symbol.for('pipe')) {
+            res = res.__vInstance?.transform ?? res;
+        }
+
+        if (!res) {
+            const extra = ``;
+            console.warn(`Failed to resolve ${type.slice(0, -1)}: ${name}${extra}`);
+        }
+
+        return res;
+    } else if (true) {
+        console.warn(`resolve${capitalize(type.slice(0, -1))} ` + `can only be used in render() or setup().`);
+    }
+}
+
+function resolve(registry: Record<string, any> | undefined, name: string) {
+    return registry && (registry[name] || registry[camelize(name)] || registry[capitalize(camelize(name))]);
 }

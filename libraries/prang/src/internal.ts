@@ -1,13 +1,15 @@
-import { kebabCase } from 'scule';
+import { camelCase, kebabCase } from 'scule';
 import type { ComponentOptions } from 'vue';
 
 export const CLASS_COMPONENT = Symbol();
-export const PIPE = Symbol();
+export const PIPE = Symbol.for('pipe');
 
 export interface ClassPipe {
     new (...args: any[]): any;
     __vType?: typeof PIPE;
-    __vSelector?: string | string[];
+    __vSelector?: string;
+    __vInstance?: any;
+    transform?: (...args: any[]) => any;
 }
 
 export interface ClassComponent {
@@ -30,10 +32,13 @@ export function resolveSelector(value: ClassComponent | ClassPipe) {
     } else if (value.__vSelector) {
         map.set(value.__vSelector, value);
     } else {
-        // Accept both versions: `my-component`
-        map.set(kebabCase(value.name), value);
-        // and `MyComponent`
-        map.set(value.name, value);
+        if (value.__vType === CLASS_COMPONENT) {
+            // Accept both versions: `my-component` and `MyComponent`
+            map.set(kebabCase(value.name), value);
+            map.set(value.name, value);
+        } else if (value.__vType === PIPE) {
+            map.set(camelCase(value.name), value);
+        }
     }
     return map;
 }

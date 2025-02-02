@@ -1,4 +1,5 @@
 import {
+    BindingTypes,
     ConstantTypes,
     createCompilerError,
     createCompoundExpression,
@@ -28,7 +29,6 @@ import {
     V_MODEL_SELECT,
     V_MODEL_TEXT
 } from '@vue/compiler-dom';
-import { BindingTypes } from './template-transform-plugin';
 
 const __DEV__ = true;
 
@@ -51,7 +51,7 @@ const baseTransformModel: DirectiveTransform = (dir, node, context) => {
 
     // im SFC <script setup> inline mode, the exp may have been transformed into
     // _unref(exp)
-    const bindingType = context.bindingMetadata[rawExp] as BindingTypes;
+    const bindingType = context.bindingMetadata[rawExp];
 
     // check props
     if (bindingType === BindingTypes.PROPS || bindingType === BindingTypes.PROPS_ALIASED) {

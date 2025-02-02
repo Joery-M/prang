@@ -9,6 +9,8 @@
 <br />
 <input type="range" min="0" max="100" *model.number="value" />
 
+<!-- {{ (text() + 'asdf') | capitalize }} -->
+
 <p *if="value() < 41">Less than 41</p>
 <p *else-if="value() == 41">Equals 41</p>
 <p *else>More than 41</p>
@@ -24,5 +26,8 @@
 
 <input type="text" *model="text" />
 <input type="text" v-model="text" />
-<button (click)="text.set('asdf')"></button>
-{{ text() }}
+
+<p>{{ text() | capitalize }}</p>
+<p>{{ text() | capitalize(true) }}</p>
+
+<button (click)="text.set('asdf')">Set to 'asdf'</button>
