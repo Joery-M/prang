@@ -29,39 +29,39 @@ import {
     type TransformContext
 } from '@vue/compiler-core';
 
-export const transformFilter: NodeTransform = (node, context) => {
+export const transformPipe: NodeTransform = (node, context) => {
     if (node.type === NodeTypes.INTERPOLATION) {
         // filter rewrite is applied before expression transform so only
         // simple expressions are possible at this stage
-        rewriteFilter(node.content, context);
+        rewritePipe(node.content, context);
     } else if (node.type === NodeTypes.ELEMENT) {
         node.props.forEach((prop) => {
             if (prop.type === NodeTypes.DIRECTIVE && prop.name !== 'for' && prop.exp) {
-                rewriteFilter(prop.exp, context);
+                rewritePipe(prop.exp, context);
             }
         });
     }
 };
 
-function rewriteFilter(node: ExpressionNode, context: TransformContext) {
+function rewritePipe(node: ExpressionNode, context: TransformContext) {
     if (node.type === NodeTypes.SIMPLE_EXPRESSION) {
-        parseFilter(node, context);
+        parsePipe(node, context);
     } else {
         for (let i = 0; i < node.children.length; i++) {
             const child = node.children[i];
             if (typeof child !== 'object') continue;
             if (child.type === NodeTypes.SIMPLE_EXPRESSION) {
-                parseFilter(child, context);
+                parsePipe(child, context);
             } else if (child.type === NodeTypes.COMPOUND_EXPRESSION) {
-                rewriteFilter(node, context);
+                rewritePipe(node, context);
             } else if (child.type === NodeTypes.INTERPOLATION) {
-                rewriteFilter(child.content, context);
+                rewritePipe(child.content, context);
             }
         }
     }
 }
 
-function parseFilter(node: SimpleExpressionNode, context: TransformContext) {
+function parsePipe(node: SimpleExpressionNode, context: TransformContext) {
     if (!node.ast || !isBinaryExpression(node.ast, { operator: '|' })) return;
 
     let finalExpression: Exclude<Expression, BinaryExpression> | undefined;

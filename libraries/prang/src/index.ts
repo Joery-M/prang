@@ -19,16 +19,6 @@ export const signal = <T>(initialValue: T): Signal<T> => {
     s.update = (updater: (original: T) => T) => {
         r.value = updater(r.value);
     };
-    Object.defineProperty(s, 'value', {
-        enumerable: true,
-        configurable: true,
-        get() {
-            return r.value;
-        },
-        set(value) {
-            r.value = value;
-        }
-    });
     s[ReactiveFlags.IS_REF] = true;
     s[ReactiveFlags.IS_SHALLOW] = true;
     s['__v_isSignal'] = true;

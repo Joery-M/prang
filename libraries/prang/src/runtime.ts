@@ -71,6 +71,9 @@ export function resolveFilter(name: string) {
             resolve((instance.appContext as any)[type], name);
 
         if (typeof res === 'function' && res.__vType === Symbol.for('pipe')) {
+            if (!res.__vInstance) {
+                res.__vInstance = new res();
+            }
             res = res.__vInstance?.transform ?? res;
         }
 

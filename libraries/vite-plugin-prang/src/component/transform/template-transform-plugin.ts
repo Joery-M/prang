@@ -19,7 +19,7 @@ import { type Plugin } from 'vite';
 import { ComponentMap, type ComponentMeta } from '../../internal';
 import { baseParse } from '../../template/parse';
 import { parseTemplateRequest } from '../../utils';
-import { transformFilter } from './transformPipe';
+import { transformPipe } from './transformPipe';
 import { transformModel } from './vModel';
 
 export enum BindingTypes {
@@ -135,7 +135,7 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
         prefixIdentifiers,
         directiveTransforms: Object.assign({}, directiveTransforms, { model: transformModel }),
         scopeId,
-        nodeTransforms: [transformFilter, ...nodeTransforms, importedComponentTransform(meta)]
+        nodeTransforms: [transformPipe, ...nodeTransforms, importedComponentTransform(meta)]
     });
     const result = generate(parsed, {
         filename,

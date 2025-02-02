@@ -52,7 +52,7 @@ export function Component(m?: ComponentMeta): Function {
                 });
 
                 const wrapped = wrapReactiveClass(instance);
-                return (ctx: any, cache: any) => meta.render(instance, cache, props, wrapped);
+                return (_ctx: any, cache: any) => meta.render.call(instance, instance, cache, props, wrapped);
             }
         };
     };
