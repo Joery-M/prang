@@ -13,11 +13,10 @@ import {
     isBinaryExpression,
     isCallExpression,
     isIdentifier,
+    isMemberExpression,
     isPrivateName,
     type BinaryExpression,
-    type CallExpression,
-    type Expression,
-    type Identifier
+    type Expression
 } from '@babel/types';
 import {
     NodeTypes,
@@ -28,6 +27,7 @@ import {
     type SimpleExpressionNode,
     type TransformContext
 } from '@vue/compiler-core';
+import { walkAST } from 'ast-kit';
 
 export const transformPipe: NodeTransform = (node, context) => {
     if (node.type === NodeTypes.INTERPOLATION) {
@@ -47,6 +47,8 @@ function rewritePipe(node: ExpressionNode, context: TransformContext) {
     if (node.type === NodeTypes.SIMPLE_EXPRESSION) {
         parsePipe(node, context);
     } else {
+        // Cant find a case where this section still applies, yet.
+        // Maybe if there are other expression rewrites before this
         for (let i = 0; i < node.children.length; i++) {
             const child = node.children[i];
             if (typeof child !== 'object') continue;
@@ -62,12 +64,35 @@ function rewritePipe(node: ExpressionNode, context: TransformContext) {
 }
 
 function parsePipe(node: SimpleExpressionNode, context: TransformContext) {
-    if (!node.ast || !isBinaryExpression(node.ast, { operator: '|' })) return;
+    if (!node.ast) return;
 
+    let changed = false;
+    const result = walkAST(node.ast, {
+        enter(node) {
+            if (node.type === 'BinaryExpression' && node.operator === '|') {
+                const res = transformBinaryExp(node, context);
+                if (res) {
+                    this.replace(res);
+                    changed = true;
+                }
+            }
+        }
+    });
+    if (!changed || !result) return;
+
+    // Typescript gets angry if I just use `import generate from '@babel/generator';`
+    const generated = new CodeGenerator(result).generate();
+
+    context.helper(RESOLVE_FILTER);
+    node.content = generated.code;
+    node.ast = undefined;
+}
+
+function transformBinaryExp(exp: BinaryExpression, context: TransformContext) {
     let finalExpression: Exclude<Expression, BinaryExpression> | undefined;
-    const stack: (Identifier | CallExpression)[] = [];
+    const stack: Expression[] = [];
     const walkBinaryStack = (exp: BinaryExpression) => {
-        if (isIdentifier(exp.right) || isCallExpression(exp.right)) {
+        if (isIdentifier(exp.right) || isCallExpression(exp.right) || isMemberExpression(exp.right)) {
             stack.push(exp.right);
         }
         if (isBinaryExpression(exp.left, { operator: '|' })) {
@@ -76,17 +101,20 @@ function parsePipe(node: SimpleExpressionNode, context: TransformContext) {
             finalExpression = exp.left;
         }
     };
-    walkBinaryStack(node.ast);
+    walkBinaryStack(exp);
 
     if (!finalExpression) return;
 
     // If identifier, make it a call expression with the previous item as first arg
+    // If member expression, same treatment as identifier, but with member exp
     // If call expression, add the previous exp as the first argument
     const result = stack.reduceRight((prev, cur) => {
         if (isIdentifier(cur)) {
             const newName = toValidAssetId(cur.name, 'filter');
             context.filters?.add(cur.name);
             return callExpression(identifier(newName), [prev]);
+        } else if (isMemberExpression(cur)) {
+            return callExpression(cur, [prev]);
         } else if (isCallExpression(cur)) {
             // If its a direct identifier, assume its an imported pipe
             // Else if its a member expression (e.g. this.capitalize), use that directly
@@ -102,10 +130,5 @@ function parsePipe(node: SimpleExpressionNode, context: TransformContext) {
         }
     }, finalExpression);
 
-    // Typescript gets angry if I just use `import generate from '@babel/generator';`
-    const generated = new CodeGenerator(result).generate();
-
-    context.helper(RESOLVE_FILTER);
-    node.content = generated.code;
-    node.ast = undefined;
+    return result;
 }

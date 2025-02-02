@@ -16,4 +16,8 @@ export class AppComponent {
     increment() {
         this.value.update((v) => v + 1);
     }
+
+    addA(value: string) {
+        return value + 'A'
+    }
 }
