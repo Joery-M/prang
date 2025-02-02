@@ -1,13 +1,16 @@
 import { ReactiveFlags, shallowRef, computed as vComputed } from '@vue/reactivity';
+import { getCurrentInstance } from 'vue';
 
 export { bootstrapComponent } from './app';
 export { Component } from './component';
 export { Pipe } from './pipe';
 
-export type Signal<T = any> = {
+export type ReadonlySignal<T = any> = {
+    (): T;
+};
+export type Signal<T = any> = ReadonlySignal<T> & {
     set: (value: T) => void;
     update: (updater: (original: T) => T) => void;
-    (): T;
 };
 
 export const signal = <T>(initialValue: T): Signal<T> => {
@@ -29,7 +32,7 @@ export const signal = <T>(initialValue: T): Signal<T> => {
 export interface ComputedOptions<T> {
     equal?: (a: T, b: T) => boolean;
 }
-export const computed = <T>(fn: () => T, opts?: ComputedOptions<T>): (() => T) => {
+export const computed = <T>(fn: () => T, opts?: ComputedOptions<T>): ReadonlySignal<T> => {
     const c = vComputed<T>((oldVal) => {
         const newVal = fn();
         if (opts?.equal) {
@@ -44,3 +47,15 @@ export const computed = <T>(fn: () => T, opts?: ComputedOptions<T>): (() => T) =
     const s = () => c.value;
     return s;
 };
+
+export function input<T>(): ReadonlySignal<T | undefined>;
+export function input<T>(defaultValue?: T): ReadonlySignal<T> {
+    const r = shallowRef(defaultValue);
+    const s = () => r.value;
+
+    s['set'] = (newVal: T) => (r.value = newVal);
+    s['__v_isInput'] = true;
+    s[ReactiveFlags.IS_READONLY] = true;
+    s[ReactiveFlags.IS_SHALLOW] = true;
+    return s;
+}

@@ -4,13 +4,15 @@ import {
     getCurrentInstance,
     isProxy,
     isRef,
+    ReactiveFlags,
+    shallowRef,
     toValue,
     withDirectives as vWithDirectives,
     type ComponentOptions,
     type DirectiveArguments,
     type VNode
 } from '@vue/runtime-core';
-import type { Signal } from '.';
+import type { ReadonlySignal, Signal } from '.';
 
 export * from '@vue/runtime-core';
 export * from '@vue/runtime-dom';

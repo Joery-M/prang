@@ -1,15 +1,20 @@
+import { watch } from '@vue/reactivity';
 import {
     CLASS_COMPONENT,
+    isInput,
     PIPE,
     resolveSelector,
     type AnyClassImport,
     type ClassComponent,
     type ClassPipe
 } from './internal';
-import { createCommentVNode, onBeforeUnmount, onMounted, wrapReactiveClass } from './runtime';
+import { createCommentVNode, onBeforeUnmount, onMounted, wrapReactiveClass, type Prop } from './runtime';
 
 export function Component(m?: ComponentMeta): Function {
-    const meta = (m ?? { fileUrl: 'Unknown', render: () => createCommentVNode() }) as ProcessedComponentMeta;
+    const meta = Object.assign(
+        { fileUrl: 'Unknown', render: () => createCommentVNode() },
+        m || {}
+    ) as ProcessedComponentMeta;
     if (!meta?.render) return Function();
 
     const components = new Map<string, ClassComponent>();
@@ -38,6 +43,7 @@ export function Component(m?: ComponentMeta): Function {
             __file: meta.fileUrl,
             components: Object.fromEntries(components),
             filters: Object.fromEntries(filters),
+            props: meta.inputs,
             setup(props) {
                 const instance = new component();
                 onMounted(() => {
@@ -50,6 +56,20 @@ export function Component(m?: ComponentMeta): Function {
                         instance.onDestroy();
                     }
                 });
+                watch(
+                    props,
+                    (propValues) => {
+                        for (const [key, value] of Object.entries(propValues)) {
+                            if (key in instance && isInput(instance[key])) {
+                                const instProp = instance[key];
+                                if (value !== instProp()) {
+                                    (instProp as any).set(value);
+                                }
+                            }
+                        }
+                    },
+                    { immediate: true }
+                );
 
                 const wrapped = wrapReactiveClass(instance);
                 return (_ctx: any, cache: any) => meta.render.call(instance, instance, cache, props, wrapped);
@@ -76,4 +96,6 @@ interface ProcessedComponentMeta extends ComponentMeta {
     template?: never;
     render: Function;
     fileUrl: string;
+    inputs?: Record<string, Prop<any>>;
+    outputs?: string[];
 }

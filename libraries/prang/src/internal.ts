@@ -1,5 +1,6 @@
 import { camelCase, kebabCase } from 'scule';
 import type { ComponentOptions } from 'vue';
+import type { ReadonlySignal } from '.';
 
 export const CLASS_COMPONENT = Symbol();
 export const PIPE = Symbol.for('pipe');
@@ -41,4 +42,8 @@ export function resolveSelector(value: ClassComponent | ClassPipe) {
         }
     }
     return map;
+}
+
+export function isInput<T>(r: ReadonlySignal<T> | unknown): r is ReadonlySignal<T> {
+    return r ? (r as any)['__v_isInput'] === true : false;
 }

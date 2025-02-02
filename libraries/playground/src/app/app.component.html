@@ -1,8 +1,10 @@
 <p>{{ 'A'.repeat(value() + 1) }}</p>
 <div
     [style]="{ width: '200px', height: '200px', display: 'flex', 'justify-content': 'center', 'align-items': 'center' }"
+    style="flex-direction: column"
 >
-    <p>{{ value() }} {{ computed() }}</p>
+    <p>{{ value() }}</p>
+    <p>{{ computed() | this.currency }}</p>
 </div>
 <button @click="value.update(v => v + 1)">Increment</button>
 <button (click)="increment()">Increment</button>
@@ -30,5 +32,8 @@
 <p>{{ text() | capitalize }}</p>
 <p>{{ text() | capitalize(true) }}</p>
 <p>{{ (text() | this.addA) | capitalize(true) }}</p>
+<p>{{ text() | this.addA | this.addA }}</p>
 
 <button (click)="text.set('asdf')">Set to 'asdf'</button>
+
+<display-text [value]="text()" />

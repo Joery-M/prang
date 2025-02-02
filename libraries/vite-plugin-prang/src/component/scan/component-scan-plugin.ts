@@ -2,11 +2,14 @@ import { parse } from '@babel/parser';
 import {
     isArrayExpression,
     isCallExpression,
+    isClassProperty,
     isIdentifier,
     isImportDeclaration,
     isObjectExpression,
     isObjectProperty,
+    objectExpression,
     type ClassDeclaration,
+    type Expression,
     type ObjectExpression
 } from '@babel/types';
 import {
@@ -68,12 +71,10 @@ export function ComponentScanPlugin(): Plugin {
 
                 // Add the file path before the first property
                 const firstProp = decoratorArg.properties[0];
-                if (isObjectProperty(firstProp)) {
-                    s.prependRight(
-                        firstProp.start!,
-                        `fileUrl: ${JSON.stringify(path.relative(this.environment.config.root, id))},\n`
-                    );
-                }
+                s.appendRight(
+                    isObjectProperty(firstProp) ? firstProp.start! : decoratorArg.start!,
+                    `fileUrl: ${JSON.stringify(path.relative(this.environment.config.root, id))},\n\t`
+                );
 
                 for await (const prop of decoratorArg.properties) {
                     if (!isObjectProperty(prop) || !isIdentifier(prop.key)) continue;
@@ -152,6 +153,61 @@ export function ComponentScanPlugin(): Plugin {
                 return meta;
             };
 
+            function resolveProps(decoratorArg: ObjectExpression, node: ClassDeclaration) {
+                const inputIdentifier = Object.values(imports).find(
+                    (imp) => imp.source == '@prang/core' && imp.imported == 'input'
+                )?.local;
+                const outputIdentifier = Object.values(imports).find(
+                    (imp) => imp.source == '@prang/core' && imp.imported == 'output'
+                )?.local;
+
+                const firstProp = decoratorArg.properties[0];
+                const decPropsStart = isObjectProperty(firstProp) ? firstProp.start! : decoratorArg.start!;
+
+                const inputs = new Set<Expression>();
+                const outputs = new Set<Expression>();
+
+                for (const property of node.body.body) {
+                    if (
+                        !isClassProperty(property) ||
+                        ![undefined, null, 'public'].includes(property.accessibility) ||
+                        property.static
+                    )
+                        continue;
+                    if (
+                        inputIdentifier &&
+                        isCallExpression(property.value) &&
+                        isIdentifierOf(property.value.callee, inputIdentifier)
+                    ) {
+                        console.log('Input');
+                        inputs.add(property.key);
+                    }
+                    if (
+                        outputIdentifier &&
+                        isCallExpression(property.value) &&
+                        isIdentifierOf(property.value.callee, outputIdentifier)
+                    ) {
+                        console.log('Output');
+                        outputs.add(property.key);
+                    }
+                }
+
+                if (inputs.size) {
+                    s.appendRight(decPropsStart, `inputs: {`);
+                    for (const input of inputs) {
+                        s.appendRight(decPropsStart, s.original.slice(input.start!, input.end!) + ': {}');
+                    }
+                    s.appendRight(decPropsStart, `},\n\t`);
+                }
+                if (outputs.size) {
+                    s.appendRight(decPropsStart, `outputs: [`);
+                    for (const output of outputs) {
+                        s.appendRight(decPropsStart, JSON.stringify(s.original.slice(output.start!, output.end!)));
+                    }
+                    s.appendRight(decPropsStart, `],\n\t`);
+                }
+            }
+
             await walkASTAsync(ast.program, {
                 enter: async (node, parent) => {
                     switch (node.type) {
@@ -182,17 +238,31 @@ export function ComponentScanPlugin(): Plugin {
                                 let meta: ComponentMeta | undefined;
                                 const scopeHash = getHash(id + '#' + classDeclarationIndex);
 
-                                for (const arg of decorator.expression.arguments) {
-                                    if (!isObjectExpression(arg)) continue;
-                                    const newMeta = await getComponentMeta(arg, node, id, scopeHash);
-                                    if (newMeta) {
-                                        meta = {
-                                            ...newMeta,
-                                            sourceId: id,
-                                            className: node.id ? resolveIdentifier(node.id)[0] : undefined,
-                                            span: { start: node.start!, end: node.end! }
-                                        };
-                                    }
+                                let arg: ObjectExpression | undefined = isObjectExpression(
+                                    decorator.expression.arguments[0]
+                                )
+                                    ? decorator.expression.arguments[0]
+                                    : undefined;
+
+                                let insertedObj = false;
+                                if (!arg) {
+                                    s.prependLeft(decorator.expression.end! - 1, '{\n');
+                                    arg = objectExpression([]);
+                                    arg.start = decorator.expression.end! - 1;
+                                    insertedObj = true;
+                                }
+                                resolveProps(arg, node);
+                                const newMeta = await getComponentMeta(arg, node, id, scopeHash);
+                                if (newMeta) {
+                                    meta = {
+                                        ...newMeta,
+                                        sourceId: id,
+                                        className: node.id ? resolveIdentifier(node.id)[0] : undefined,
+                                        span: { start: node.start!, end: node.end! }
+                                    };
+                                }
+                                if (insertedObj) {
+                                    s.appendRight(arg.start!, '}');
                                 }
 
                                 if (meta) {
@@ -204,10 +274,12 @@ export function ComponentScanPlugin(): Plugin {
                 }
             });
 
-            return {
-                code: s.toString(),
-                map: s.generateMap()
-            };
+            if (s.hasChanged()) {
+                return {
+                    code: s.toString(),
+                    map: s.generateMap()
+                };
+            }
         },
         buildStart() {
             ComponentMap.clear();
