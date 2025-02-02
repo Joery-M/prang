@@ -10,6 +10,7 @@ import {
     objectExpression,
     toKeyAlias,
     type ClassDeclaration,
+    type ClassProperty,
     type Expression,
     type ObjectExpression
 } from '@babel/types';
@@ -166,7 +167,7 @@ export function ComponentScanPlugin(): Plugin {
                 const decPropsStart = isObjectProperty(firstProp) ? firstProp.start! : decoratorArg.start!;
 
                 const inputs = new Set<Expression>();
-                const outputs = new Set<Expression>();
+                const outputs = new Set<ClassProperty>();
 
                 for (const property of node.body.body) {
                     if (
@@ -180,7 +181,6 @@ export function ComponentScanPlugin(): Plugin {
                         isCallExpression(property.value) &&
                         isIdentifierOf(property.value.callee, inputIdentifier)
                     ) {
-                        console.log('Input');
                         s.overwrite(property.value.callee.start!, property.value.callee.end!, '_compiledInput');
                         s.appendRight(
                             (property.value.typeParameters || property.value.callee).end! + 1,
@@ -199,8 +199,18 @@ export function ComponentScanPlugin(): Plugin {
                         isCallExpression(property.value) &&
                         isIdentifierOf(property.value.callee, outputIdentifier)
                     ) {
-                        console.log('Output');
-                        outputs.add(property.key);
+                        s.overwrite(property.value.callee.start!, property.value.callee.end!, '_compiledOutput');
+                        s.appendRight(
+                            (property.value.typeParameters || property.value.callee).end! + 1,
+                            JSON.stringify(toKeyAlias(property)) + (property.value.arguments.length ? ', ' : '')
+                        );
+                        outputs.add(property);
+
+                        if (!('_compiledOutput' in imports)) {
+                            s.prepend(`import { compiledOutput as _compiledOutput } from '@prang/core/runtime';\n`);
+                            // Not going to be used anyway
+                            imports['_compiledOutput'] = {} as any;
+                        }
                     }
                 }
 
@@ -214,7 +224,7 @@ export function ComponentScanPlugin(): Plugin {
                 if (outputs.size) {
                     s.appendRight(decPropsStart, `outputs: [`);
                     for (const output of outputs) {
-                        s.appendRight(decPropsStart, JSON.stringify(s.original.slice(output.start!, output.end!)));
+                        s.appendRight(decPropsStart, JSON.stringify(toKeyAlias(output)));
                     }
                     s.appendRight(decPropsStart, `],\n\t`);
                 }

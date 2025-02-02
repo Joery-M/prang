@@ -8,7 +8,7 @@ import {
     type DirectiveArguments,
     type VNode
 } from '@vue/runtime-core';
-import type { ReadonlySignal, Signal } from '.';
+import type { Output, ReadonlySignal, Signal } from '.';
 
 export * from '@vue/runtime-core';
 export * from '@vue/runtime-dom';
@@ -108,4 +108,13 @@ export function compiledInput<T>(propName: string, defaultValue?: T): ReadonlySi
     s[ReactiveFlags.IS_READONLY] = true;
     s[ReactiveFlags.IS_SHALLOW] = true;
     return s;
+}
+
+export function compiledOutput<T extends any | readonly any[] = any>(propName: string): Output<T> {
+    const inst = getCurrentInstance();
+    if (!inst) throw new Error('Compiled output was called without active instance');
+
+    return (...args: T extends Array<any> ? T : [T]) => {
+        inst.emit(propName, ...args);
+    };
 }

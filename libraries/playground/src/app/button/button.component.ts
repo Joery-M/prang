@@ -1,4 +1,4 @@
-import { Component, signal } from '@prang/core';
+import { Component, output, signal } from '@prang/core';
 
 @Component({
     selector: 'button-component',
@@ -6,8 +6,10 @@ import { Component, signal } from '@prang/core';
 })
 export default class ButtonComponent {
     counter = signal(0);
+    incremented = output<number>()
 
     increment() {
         this.counter.update((v) => v + 1);
+        this.incremented(this.counter())
     }
 }

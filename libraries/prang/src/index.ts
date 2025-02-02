@@ -11,6 +11,9 @@ export type Signal<T = any> = ReadonlySignal<T> & {
     set: (value: T) => void;
     update: (updater: (original: T) => T) => void;
 };
+export interface Output<T extends any | readonly any[]> {
+    (...v: T extends Array<any> ? T : [T]): void;
+}
 
 export const signal = <T>(initialValue: T): Signal<T> => {
     const r = shallowRef(initialValue);
@@ -58,4 +61,10 @@ export function input<T>(defaultValue?: T): ReadonlySignal<T> {
     s[ReactiveFlags.IS_READONLY] = true;
     s[ReactiveFlags.IS_SHALLOW] = true;
     return s;
+}
+
+export function output<T extends any | readonly any[] = any>(): Output<T> {
+    return (...args: T extends Array<any> ? T : [T]) => {
+        // inst.emit(propName, args.flat(1));
+    };
 }
