@@ -38,7 +38,7 @@ export function Component(m?: ComponentMeta): Function {
         component.__vSelector = meta.selector;
 
         component.__vccOpts = {
-            name: componentName,
+            __name: componentName,
             __file: meta.fileUrl,
             components: Object.fromEntries(components),
             filters: Object.fromEntries(filters),
@@ -67,6 +67,7 @@ export function Component(m?: ComponentMeta): Function {
                 );
 
                 expose({ [CLASS_COMPONENT]: instance });
+                console.log(this);
                 return (_ctx: any, cache: any) => meta.render.call(instance, instance, cache);
             }
         };
