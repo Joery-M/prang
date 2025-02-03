@@ -1,3 +1,8 @@
+/**
+ * @prang/core/runtime
+ *
+ * @license MIT
+ */
 import { ReactiveFlags, computed, isProxy, isRef, ref, toRefs, toValue, watch } from '@vue/reactivity';
 import {
     camelize,
@@ -10,7 +15,6 @@ import {
 } from '@vue/runtime-core';
 import type { Output, ReadonlySignal, Signal } from '.';
 
-export * from '@vue/runtime-core';
 export * from '@vue/runtime-dom';
 
 export function isSignal<T>(r: Signal<T> | unknown): r is Signal<T> {

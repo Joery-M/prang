@@ -1,5 +1,12 @@
 import crypto from 'node:crypto';
 
+interface TemplateQuery {
+    scopeId?: string;
+    classIndex?: number;
+    prang?: boolean;
+    type?: 'style' | 'inline-template' | 'template';
+}
+
 export function parseTemplateRequest(id: string): {
     filename: string;
     query: TemplateQuery;
@@ -8,12 +15,6 @@ export function parseTemplateRequest(id: string): {
     const query = Object.fromEntries(new URLSearchParams(rawQuery)) as TemplateQuery;
     if (query.prang != null) {
         query.prang = true;
-    }
-    if (query.classIndex != null) {
-        query.classIndex = 0;
-    }
-    if (query.inline != null) {
-        query.inline = true;
     }
     return {
         filename,
@@ -28,11 +29,4 @@ const hash =
 
 export function getHash(text: string): string {
     return hash('sha256', text, 'hex').substring(0, 8);
-}
-
-interface TemplateQuery {
-    scopeId?: string;
-    classIndex?: number;
-    prang?: boolean;
-    inline?: boolean;
 }

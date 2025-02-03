@@ -11,7 +11,7 @@ import { createCommentVNode, onBeforeUnmount, onMounted, watch, type Prop } from
 
 export function Component(m?: ComponentMeta): Function {
     const meta = Object.assign(
-        { fileUrl: 'Unknown', render: () => createCommentVNode() },
+        { fileUrl: 'Unknown', render: () => createCommentVNode(), scopeId: '' },
         m || {}
     ) as ProcessedComponentMeta;
     if (!meta?.render) return Function();
@@ -40,6 +40,7 @@ export function Component(m?: ComponentMeta): Function {
         component.__vccOpts = {
             __name: componentName,
             __file: meta.fileUrl,
+            __scopeId: meta.styleUrls?.length || meta.styles?.length ? 'data-v-' + meta.scopeId : undefined,
             components: Object.fromEntries(components),
             filters: Object.fromEntries(filters),
             props: meta.inputs,
@@ -92,6 +93,7 @@ interface ProcessedComponentMeta extends ComponentMeta {
     template?: never;
     render: Function;
     fileUrl: string;
+    scopeId: string;
     inputs?: Record<string, Prop<any>>;
     outputs?: string[];
 }

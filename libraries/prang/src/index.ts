@@ -1,3 +1,8 @@
+/**
+ * @prang/core
+ *
+ * @license MIT
+ */
 import { ReactiveFlags, shallowRef, computed as vComputed } from '@vue/reactivity';
 import { useTemplateRef } from 'vue';
 import { CLASS_COMPONENT } from './internal';

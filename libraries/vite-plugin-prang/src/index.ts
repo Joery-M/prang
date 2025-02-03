@@ -1,6 +1,7 @@
 import type { Plugin } from 'vite';
 import { ComponentScanPlugin } from './component/component-scan-plugin';
 import { TemplateTransformPlugin } from './component/template/template-transform-plugin';
+import { ComponentStyleTransform } from './component/style/style-transform-plugin';
 
 export function prang(): Plugin[] {
     return [
@@ -20,6 +21,7 @@ export function prang(): Plugin[] {
             }
         },
         ComponentScanPlugin(),
-        TemplateTransformPlugin()
+        TemplateTransformPlugin(),
+        ComponentStyleTransform()
     ];
 }

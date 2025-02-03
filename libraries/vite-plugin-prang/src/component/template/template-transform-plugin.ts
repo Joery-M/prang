@@ -10,7 +10,7 @@ import {
     type TemplateChildNode,
     type TransformContext
 } from '@vue/compiler-core';
-import { parse } from 'node:path';
+import { basename } from 'pathe';
 import { type SourceMapInput } from 'rollup';
 import { kebabCase } from 'scule';
 import { type Plugin } from 'vite';
@@ -78,7 +78,7 @@ export function TemplateTransformPlugin(): Plugin {
         },
         load(id, options) {
             const request = parseTemplateRequest(id);
-            if (!request?.query.prang || !request.query.inline || !request.query.scopeId) return;
+            if (!request?.query.prang || request.query.type !== 'inline-template' || !request.query.scopeId) return;
             const meta = ComponentMap.get(request.query.scopeId);
 
             const templateString = meta?.template ?? '';
@@ -95,7 +95,7 @@ export function TemplateTransformPlugin(): Plugin {
         },
         transform(code, id, options) {
             const request = parseTemplateRequest(id);
-            if (!request?.query.prang || request.query.inline) return;
+            if (!request?.query.prang || request.query.type !== 'template') return;
             const isProd = this.environment.mode === 'build';
             const result = compileTemplate(
                 code,
@@ -111,7 +111,7 @@ export function TemplateTransformPlugin(): Plugin {
 }
 
 function compileTemplate(code: string, path: string, scopeId: string, ssr: boolean, isProd: boolean) {
-    const filename = parse(path).name + parse(path).ext;
+    const filename = basename(path);
 
     const meta = ComponentMap.get(scopeId);
 
@@ -130,6 +130,7 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
         inSSR: ssr,
         hoistStatic: true,
         cacheHandlers: false,
+        slotted: true,
         prefixIdentifiers,
         directiveTransforms: Object.assign({}, directiveTransforms, { model: transformModel }),
         scopeId,
