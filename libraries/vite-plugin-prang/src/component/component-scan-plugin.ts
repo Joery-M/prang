@@ -26,8 +26,8 @@ import {
 import MagicString from 'magic-string';
 import path from 'pathe';
 import type { Plugin } from 'vite';
-import { ComponentMap, type ComponentMeta } from '../../internal';
-import { getHash } from '../../utils';
+import { ComponentMap, type ComponentMeta } from '../internal';
+import { getHash } from '../utils';
 
 export function ComponentScanPlugin(): Plugin {
     return {

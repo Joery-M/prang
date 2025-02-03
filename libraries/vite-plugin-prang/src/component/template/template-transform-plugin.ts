@@ -1,24 +1,22 @@
 import {
     ElementTypes,
+    generate,
     getBaseTransformPreset,
     isCoreComponent,
     NodeTypes,
-    generate,
     transform,
     type ComponentNode,
     type RootNode,
     type TemplateChildNode,
     type TransformContext
 } from '@vue/compiler-core';
-import {} from '@vue/compiler-dom';
-// import { compileTemplate as sfcCompileTemplate } from '@vue/compiler-sfc';
 import { parse } from 'node:path';
 import { type SourceMapInput } from 'rollup';
 import { kebabCase } from 'scule';
 import { type Plugin } from 'vite';
 import { ComponentMap, type ComponentMeta } from '../../internal';
-import { baseParse } from '../../template/parse';
 import { parseTemplateRequest } from '../../utils';
+import { baseParse } from './parser/parse';
 import { transformPipe } from './transformPipe';
 import { transformModel } from './vModel';
 

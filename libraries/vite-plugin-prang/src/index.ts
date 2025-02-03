@@ -1,6 +1,6 @@
 import type { Plugin } from 'vite';
-import { ComponentScanPlugin } from './component/scan/component-scan-plugin';
-import { TemplateTransformPlugin } from './component/transform/template-transform-plugin';
+import { ComponentScanPlugin } from './component/component-scan-plugin';
+import { TemplateTransformPlugin } from './component/template/template-transform-plugin';
 
 export function prang(): Plugin[] {
     return [
