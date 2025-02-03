@@ -12,11 +12,10 @@ Look in `libraries/playground` for the current testing setup.
 
 - Components are defined as classes with a decorator
 - PIPES!! (proud of this one)
-- Signals can be used instead of refs
+- Angular style signals (actually Vue `shallowRef` under the hood)
 - Built-in rxjs support (thanks vueuse!)
 - Attribute binding with `[attr]="value"`
 - Event binding with `(click)="clicked()"`
-- Angular style signals
 - Components can have `input`s and `output`s
 - Inline templates and styles
 - `viewChild()`
