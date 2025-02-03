@@ -72,7 +72,7 @@ export function TemplateTransformPlugin(): Plugin {
         name: 'prang:template-transform',
         resolveId(id) {
             const req = parseTemplateRequest(id);
-            if (req?.query.prang) {
+            if (req?.query.prang && (req.query.type === 'inline-template' || req.query.type === 'template')) {
                 return id;
             }
         },

@@ -101,7 +101,7 @@ export function compiledInput<T>(propName: string, defaultValue?: T): ReadonlySi
     const useDefault = ref(false);
     if (defaultValue !== undefined) {
         useDefault.value = true;
-        watch(props[propName], (v) => (useDefault.value = false), { once: true });
+        watch(props[propName], () => (useDefault.value = false), { once: true });
     }
 
     const r = computed<T>(() => (useDefault.value || !(propName in props) ? defaultValue : props[propName].value) as T);

@@ -1,3 +1,4 @@
+import type { SourceLocation } from '@babel/types';
 import type { ImportBinding } from 'ast-kit';
 
 export interface ComponentMeta {
@@ -10,7 +11,13 @@ export interface ComponentMeta {
     className?: string;
     template?: string;
     inlineTemplate?: boolean;
-    styles?: string[];
+    /**
+     * Inline styles
+     */
+    styles?: {
+        loc: SourceLocation;
+        code: string;
+    }[];
     imports?: ImportBinding[];
 }
 

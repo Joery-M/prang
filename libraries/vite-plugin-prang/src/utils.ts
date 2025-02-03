@@ -4,7 +4,8 @@ interface TemplateQuery {
     scopeId?: string;
     classIndex?: number;
     prang?: boolean;
-    type?: 'style' | 'inline-template' | 'template';
+    type?: 'style' | 'inline-style' | 'inline-template' | 'template';
+    styleIndex?: number;
 }
 
 export function parseTemplateRequest(id: string): {
@@ -15,6 +16,9 @@ export function parseTemplateRequest(id: string): {
     const query = Object.fromEntries(new URLSearchParams(rawQuery)) as TemplateQuery;
     if (query.prang != null) {
         query.prang = true;
+    }
+    if (query.styleIndex != null) {
+        query.styleIndex = Number(query.styleIndex);
     }
     return {
         filename,

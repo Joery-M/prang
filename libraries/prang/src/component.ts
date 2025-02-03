@@ -40,7 +40,7 @@ export function Component(m?: ComponentMeta): Function {
         component.__vccOpts = {
             __name: componentName,
             __file: meta.fileUrl,
-            __scopeId: meta.styleUrls?.length || meta.styles?.length ? 'data-v-' + meta.scopeId : undefined,
+            __scopeId: meta.scopeId ? 'data-v-' + meta.scopeId : undefined,
             components: Object.fromEntries(components),
             filters: Object.fromEntries(filters),
             props: meta.inputs,
@@ -68,7 +68,6 @@ export function Component(m?: ComponentMeta): Function {
                 );
 
                 expose({ [CLASS_COMPONENT]: instance });
-                console.log(this);
                 return (_ctx: any, cache: any) => meta.render.call(instance, instance, cache);
             }
         };

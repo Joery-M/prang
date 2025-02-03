@@ -41,7 +41,7 @@ export function ComponentScanPlugin(): Plugin {
         async transform(code, id) {
             if (
                 id.includes('/node_modules/') ||
-                id.includes('&type=inline-template') ||
+                id.includes('?prang') ||
                 !code.includes('@prang/core') ||
                 !code.includes('class')
             )
@@ -49,6 +49,8 @@ export function ComponentScanPlugin(): Plugin {
 
             const ast = parse(code, {
                 sourceType: 'module',
+                sourceFilename: id,
+                errorRecovery: true,
                 plugins: [
                     'jsx',
                     'typescript',
@@ -233,13 +235,7 @@ async function getComponentMeta(
 ): Promise<Partial<ComponentMeta>> {
     const meta: Partial<ComponentMeta> = {};
 
-    // Add the file path before the first property
-    const firstProp = decoratorArg.properties[0];
-    s.appendRight(
-        isObjectProperty(firstProp) ? firstProp.start! : decoratorArg.start!,
-        `fileUrl: ${JSON.stringify(path.relative(ctx.environment.config.root, id))},\n\t` +
-            `scopeId: ${JSON.stringify(scopeHash)},\n\t`
-    );
+    let insertScopeId = false;
 
     for await (const prop of decoratorArg.properties) {
         if (!isObjectProperty(prop) || !isIdentifier(prop.key)) continue;
@@ -319,11 +315,44 @@ async function getComponentMeta(
                         s.prependLeft(classNode.start!, `import ${JSON.stringify(newUrl)};\n`);
                     }
                 });
+                insertScopeId = true;
+                s.remove(prop.start!, prop.end! + 1);
+                break;
+            }
+
+            case 'styles': {
+                if (!isArrayExpression(prop.value)) break;
+                const styles = prop.value.elements
+                    .filter((v) => isLiteral(v))
+                    .map((v) => ({
+                        code: (isTemplateLiteral(v) ? resolveTemplateLiteral(v) : resolveLiteral(v)?.toString()) ?? '',
+                        loc: v.loc!
+                    }));
+
+                meta.styles ||= [];
+                styles.forEach((style) => {
+                    const index = meta.styles!.push(style);
+                    const tmplUrl = `${id}?prang&type=inline-style&scopeId=${scopeHash}&styleIndex=${
+                        index - 1
+                    }&lang.css`;
+                    s.prependLeft(classNode.start!, `import ${JSON.stringify(tmplUrl)};\n`);
+                });
+                insertScopeId = true;
+                s.remove(prop.start!, prop.end! + 1);
+                break;
             }
 
             default:
                 break;
         }
     }
+
+    // Add the file path before the first property
+    const firstProp = decoratorArg.properties[0];
+    s.appendRight(
+        isObjectProperty(firstProp) ? firstProp.start! : decoratorArg.start!,
+        `fileUrl: ${JSON.stringify(path.relative(ctx.environment.config.root, id))},\n\t` +
+            (insertScopeId ? `scopeId: ${JSON.stringify(scopeHash)},\n\t` : '')
+    );
     return meta;
 }
