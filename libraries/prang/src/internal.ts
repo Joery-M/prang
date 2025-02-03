@@ -1,6 +1,8 @@
 import type { ComponentOptions } from 'vue';
-import type { ReadonlySignal } from '.';
+import { isSignal, type ReadonlySignal } from '.';
 
+export const SIGNAL_SOURCE = Symbol('Signal source');
+export const COMPUTED_SIGNAL = Symbol('Signal');
 export const CLASS_COMPONENT = Symbol();
 export const PIPE = Symbol.for('pipe');
 
@@ -39,4 +41,8 @@ export function resolveSelector(value: ClassComponent | ClassPipe) {
 
 export function isInput<T>(r: ReadonlySignal<T> | unknown): r is ReadonlySignal<T> {
     return r ? (r as any)['__v_isInput'] === true && !(r as any)['__v_isInputCompiled'] : false;
+}
+
+export function ifSignalToRef<T, V = Exclude<T, ReadonlySignal>>(s: T): V {
+    return isSignal(s) ? (s as any)[SIGNAL_SOURCE] : (s as unknown as V);
 }

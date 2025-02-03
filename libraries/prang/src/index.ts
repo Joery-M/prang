@@ -3,9 +3,16 @@
  *
  * @license MIT
  */
-import { ReactiveFlags, shallowRef, computed as vComputed } from '@vue/reactivity';
+import {
+    ReactiveFlags,
+    shallowRef,
+    computed as vComputed,
+    type MaybeRef,
+    type Ref,
+    type ShallowUnwrapRef
+} from '@vue/reactivity';
 import { useTemplateRef } from 'vue';
-import { CLASS_COMPONENT } from './internal';
+import { CLASS_COMPONENT, SIGNAL_SOURCE } from './internal';
 
 export { bootstrapComponent } from './app';
 export { Component } from './component';
@@ -14,21 +21,19 @@ export { Pipe } from './pipe';
 
 // Re-export useful functions that work with signals
 export {
-    watch,
     effect,
-    markRaw,
-    reactive,
     isProxy,
     isReactive,
     isReadonly,
     isRef,
     isShallow,
-    toValue
+    markRaw,
+    reactive,
+    toValue,
+    watch
 } from '@vue/reactivity';
 
-export type ReadonlySignal<T = any> = {
-    (): T;
-};
+export type ReadonlySignal<T = any> = () => T;
 export type Signal<T = any> = ReadonlySignal<T> & {
     set: (value: T) => void;
     update: (updater: (original: T) => T) => void;
@@ -37,29 +42,33 @@ export interface Output<T extends any | readonly any[]> {
     (...v: T extends Array<any> ? T : [T]): void;
 }
 
-export const signal = <T>(initialValue: T): Signal<T> => {
+export function signal<T>(initialValue: Ref<T>): Signal<ShallowUnwrapRef<T>>;
+export function signal<T>(initialValue: T): Signal<T>;
+export function signal<T = any>(): Signal<T | undefined>;
+export function signal<T>(initialValue?: MaybeRef<T>): Signal<ShallowUnwrapRef<T>> {
     const r = shallowRef(initialValue);
-    const s = () => r.value;
+    const s: any = () => r.value;
     s.set = (value: T) => {
         r.value = value;
     };
     s.update = (updater: (original: T) => T) => {
         r.value = updater(r.value);
     };
+    s[SIGNAL_SOURCE] = r;
     s[ReactiveFlags.IS_REF] = true;
     s[ReactiveFlags.IS_SHALLOW] = true;
-    s['__v_isSignal'] = true;
 
     return s;
-};
+}
 export function isSignal<T>(r: Signal<T> | unknown): r is Signal<T> {
-    return r ? (r as any)['__v_isSignal'] === true : false;
+    return r ? (r as any)[SIGNAL_SOURCE] !== undefined : false;
 }
 
 export interface ComputedOptions<T> {
     equal?: (a: T, b: T) => boolean;
 }
-export const computed = <T>(fn: () => T, opts?: ComputedOptions<T>): ReadonlySignal<T> => {
+export function computed<T>(fn: () => T, opts?: ComputedOptions<T>): ReadonlySignal<T>;
+export function computed<T>(fn: () => T, opts?: ComputedOptions<T>): ReadonlySignal<T> {
     const c = vComputed<T>((oldVal) => {
         const newVal = fn();
         if (opts?.equal) {
@@ -71,9 +80,10 @@ export const computed = <T>(fn: () => T, opts?: ComputedOptions<T>): ReadonlySig
         }
         return newVal;
     });
-    const s = () => c.value;
+    const s: any = () => c.value;
+    s[SIGNAL_SOURCE] = c;
     return s;
-};
+}
 
 export function input<T>(): ReadonlySignal<T | undefined>;
 export function input<T>(defaultValue: T): ReadonlySignal<T>;
