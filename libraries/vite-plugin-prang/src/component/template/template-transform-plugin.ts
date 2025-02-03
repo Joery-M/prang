@@ -20,53 +20,6 @@ import { baseParse } from './parser/parse';
 import { transformPipe } from './transformPipe';
 import { transformModel } from './vModel';
 
-export enum BindingTypes {
-    /**
-     * returned from data()
-     */
-    DATA = 'data',
-    /**
-     * declared as a prop
-     */
-    PROPS = 'props',
-    /**
-     * a local alias of a `<script setup>` destructured prop.
-     * the original is stored in __propsAliases of the bindingMetadata object.
-     */
-    PROPS_ALIASED = 'props-aliased',
-    /**
-     * a let binding (may or may not be a ref)
-     */
-    SETUP_LET = 'setup-let',
-    /**
-     * a const binding that can never be a ref.
-     * these bindings don't need `unref()` calls when processed in inlined
-     * template expressions.
-     */
-    SETUP_CONST = 'setup-const',
-    /**
-     * a const binding that does not need `unref()`, but may be mutated.
-     */
-    SETUP_REACTIVE_CONST = 'setup-reactive-const',
-    /**
-     * a const binding that may be a ref.
-     */
-    SETUP_MAYBE_REF = 'setup-maybe-ref',
-    /**
-     * bindings that are guaranteed to be refs
-     */
-    SETUP_REF = 'setup-ref',
-    /**
-     * declared by other options, e.g. computed, inject
-     */
-    OPTIONS = 'options',
-    /**
-     * a literal constant, e.g. 'foo', 1, true
-     */
-    LITERAL_CONST = 'literal-const',
-    SIGNAL = 'setup-signal'
-}
-
 export function TemplateTransformPlugin(): Plugin {
     return {
         name: 'prang:template-transform',
@@ -81,7 +34,7 @@ export function TemplateTransformPlugin(): Plugin {
             if (!request?.query.prang || request.query.type !== 'inline-template' || !request.query.scopeId) return;
             const meta = ComponentMap.get(request.query.scopeId);
 
-            const templateString = meta?.template ?? '';
+            const templateString = meta?.template?.source ?? '';
             const isProd = this.environment.mode === 'build';
             const result = compileTemplate(
                 templateString,

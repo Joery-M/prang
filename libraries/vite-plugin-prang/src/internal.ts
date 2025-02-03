@@ -9,7 +9,7 @@ export interface ComponentMeta {
     };
     selectors?: string[];
     className?: string;
-    template?: string;
+    template?: { loc: SourceLocation; source: string };
     inlineTemplate?: boolean;
     /**
      * Inline styles
@@ -19,6 +19,8 @@ export interface ComponentMeta {
         code: string;
     }[];
     imports?: ImportBinding[];
+    deleteLocs: SourceLocation[];
+    preamble: string;
 }
 
 export const ComponentMap = new Map<string, ComponentMeta>();

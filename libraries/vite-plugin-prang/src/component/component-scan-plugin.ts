@@ -1,4 +1,3 @@
-import { parse } from '@babel/parser';
 import {
     isArrayExpression,
     isCallExpression,
@@ -17,8 +16,10 @@ import {
     type ObjectExpression
 } from '@babel/types';
 import {
+    babelParse,
     isIdentifierOf,
     isLiteralType,
+    parseCache,
     resolveIdentifier,
     resolveLiteral,
     resolveString,
@@ -27,17 +28,25 @@ import {
     walkImportDeclaration,
     type ImportBinding
 } from 'ast-kit';
+import { readFile } from 'fs/promises';
 import MagicString from 'magic-string';
 import path from 'pathe';
-import type { TransformPluginContext } from 'rollup';
+import type { PluginContext } from 'rollup';
 import type { Plugin } from 'vite';
 import { ComponentMap, type ComponentMeta } from '../internal';
 import { getHash } from '../utils';
 
 export function ComponentScanPlugin(): Plugin {
+    parseCache.clear();
+
     return {
         name: 'prang:component-scan',
         enforce: 'pre',
+        cacheKey: 'prang:component-scan',
+        async load(id) {
+            if (id.includes('/node_modules/') || id.includes('?prang') || !/\.[tj]sx?$/.test(id)) return;
+            await getModuleInfoFromID(id, this);
+        },
         async transform(code, id) {
             if (
                 id.includes('/node_modules/') ||
@@ -47,7 +56,8 @@ export function ComponentScanPlugin(): Plugin {
             )
                 return;
 
-            const ast = parse(code, {
+            const ast = babelParse(code, path.extname(id), {
+                cache: true,
                 sourceType: 'module',
                 sourceFilename: id,
                 errorRecovery: true,
@@ -63,148 +73,67 @@ export function ComponentScanPlugin(): Plugin {
             });
 
             const s = new MagicString(code, { filename: id });
-
-            let componentIdent: string = 'Component';
-
+            const imports: Record<string, ImportBinding> = {};
             let classDeclarationIndex = -1;
 
-            const imports: Record<string, ImportBinding> = {};
-
-            function resolveProps(decoratorArg: ObjectExpression, node: ClassDeclaration) {
-                const inputIdentifier = Object.values(imports).find(
-                    (imp) => imp.source == '@prang/core' && imp.imported == 'input'
-                )?.local;
-                const outputIdentifier = Object.values(imports).find(
-                    (imp) => imp.source == '@prang/core' && imp.imported == 'output'
-                )?.local;
-
-                const firstProp = decoratorArg.properties[0];
-                const decPropsStart = isObjectProperty(firstProp) ? firstProp.start! : decoratorArg.start!;
-
-                const inputs = new Set<Expression>();
-                const outputs = new Set<ClassProperty>();
-
-                for (const property of node.body.body) {
-                    if (
-                        !isClassProperty(property) ||
-                        ![undefined, null, 'public'].includes(property.accessibility) ||
-                        property.static
-                    )
-                        continue;
-                    if (
-                        inputIdentifier &&
-                        isCallExpression(property.value) &&
-                        isIdentifierOf(property.value.callee, inputIdentifier)
-                    ) {
-                        s.overwrite(property.value.callee.start!, property.value.callee.end!, '_compiledInput');
-                        s.appendRight(
-                            (property.value.typeParameters || property.value.callee).end! + 1,
-                            JSON.stringify(toKeyAlias(property)) + (property.value.arguments.length ? ', ' : '')
-                        );
-                        inputs.add(property.key);
-
-                        if (!('_compiledInput' in imports)) {
-                            s.prepend(`import { compiledInput as _compiledInput } from '@prang/core/runtime';\n`);
-                            // Not going to be used anyway
-                            imports['_compiledInput'] = {} as any;
-                        }
-                    }
-                    if (
-                        outputIdentifier &&
-                        isCallExpression(property.value) &&
-                        isIdentifierOf(property.value.callee, outputIdentifier)
-                    ) {
-                        s.overwrite(property.value.callee.start!, property.value.callee.end!, '_compiledOutput');
-                        s.appendRight(
-                            (property.value.typeParameters || property.value.callee).end! + 1,
-                            JSON.stringify(toKeyAlias(property)) + (property.value.arguments.length ? ', ' : '')
-                        );
-                        outputs.add(property);
-
-                        if (!('_compiledOutput' in imports)) {
-                            s.prepend(`import { compiledOutput as _compiledOutput } from '@prang/core/runtime';\n`);
-                            // Not going to be used anyway
-                            imports['_compiledOutput'] = {} as any;
-                        }
-                    }
-                }
-
-                if (inputs.size) {
-                    s.appendRight(decPropsStart, `inputs: {`);
-                    for (const input of inputs) {
-                        s.appendRight(decPropsStart, s.original.slice(input.start!, input.end!) + ': {}');
-                    }
-                    s.appendRight(decPropsStart, `},\n\t`);
-                }
-                if (outputs.size) {
-                    s.appendRight(decPropsStart, `outputs: [`);
-                    for (const output of outputs) {
-                        s.appendRight(decPropsStart, JSON.stringify(toKeyAlias(output)));
-                    }
-                    s.appendRight(decPropsStart, `],\n\t`);
-                }
-            }
-
-            await walkASTAsync(ast.program, {
-                enter: async (node, parent) => {
+            await walkASTAsync(ast, {
+                enter: async (node) => {
                     switch (node.type) {
                         case 'ImportDeclaration': {
                             walkImportDeclaration(imports, node);
                             break;
                         }
-                        case 'ImportSpecifier': {
-                            if (
-                                isImportDeclaration(parent) &&
-                                parent.source.value === '@prang/core' &&
-                                isIdentifierOf(node.imported, 'Component')
-                            ) {
-                                componentIdent = node.local.name;
-                            }
-                            break;
-                        }
                         case 'ClassDeclaration': {
                             classDeclarationIndex++;
-                            if (!node.decorators || node.decorators.length == 0) return;
-                            for await (const decorator of node.decorators) {
-                                if (
-                                    !isCallExpression(decorator.expression) ||
-                                    !isIdentifierOf(decorator.expression.callee, componentIdent)
-                                )
-                                    continue;
 
-                                let meta: ComponentMeta | undefined;
-                                const scopeHash = getHash(id + '#' + classDeclarationIndex);
+                            const scopeHash = getHash(id + '#' + classDeclarationIndex);
+                            const meta = ComponentMap.get(scopeHash);
+                            const decorator = node.decorators?.[0];
+                            if (!meta || !decorator || !isCallExpression(decorator.expression)) break;
 
-                                let arg: ObjectExpression | undefined = isObjectExpression(
-                                    decorator.expression.arguments[0]
-                                )
-                                    ? decorator.expression.arguments[0]
-                                    : undefined;
+                            let arg: ObjectExpression | undefined = isObjectExpression(
+                                decorator.expression.arguments[0]
+                            )
+                                ? decorator.expression.arguments[0]
+                                : undefined;
 
-                                let insertedObj = false;
-                                if (!arg) {
-                                    s.prependLeft(decorator.expression.end! - 1, '{\n');
-                                    arg = objectExpression([]);
-                                    arg.start = decorator.expression.end! - 1;
-                                    insertedObj = true;
-                                }
-                                resolveProps(arg, node);
-                                const newMeta = await getComponentMeta(arg, node, id, scopeHash, this, s, imports);
-                                if (newMeta) {
-                                    meta = {
-                                        ...newMeta,
-                                        sourceId: id,
-                                        className: node.id ? resolveIdentifier(node.id)[0] : undefined,
-                                        span: { start: node.start!, end: node.end! }
-                                    };
-                                }
-                                if (insertedObj) {
-                                    s.appendRight(arg.start!, '}');
-                                }
+                            let insertedObj = false;
+                            if (!arg) {
+                                s.prependLeft(decorator.expression.end! - 1, '{\n');
+                                arg = objectExpression([]);
+                                arg.start = decorator.expression.end! - 1;
+                                insertedObj = true;
+                            }
+                            resolveProps(arg, node, s, imports);
 
-                                if (meta) {
-                                    ComponentMap.set(scopeHash, meta);
-                                }
+                            const insertScopeId = !!meta.styles?.length;
+                            if (insertScopeId) {
+                                const firstProp = arg.properties[0];
+                                const decPropsStart = isObjectProperty(firstProp) ? firstProp.start! : arg.start!;
+                                s.appendRight(
+                                    decPropsStart,
+                                    `fileUrl: ${JSON.stringify(path.relative(this.environment.config.root, id))},\n\t` +
+                                        (insertScopeId ? `scopeId: ${JSON.stringify(scopeHash)},\n\t` : '')
+                                );
+                            }
+
+                            for (const deleteLoc of meta.deleteLocs) {
+                                s.remove(deleteLoc.start.index, deleteLoc.end.index);
+                            }
+
+                            // Add preample
+                            s.prependLeft(node.start!, meta.preamble);
+
+                            // Add render fn
+                            if (meta.template) {
+                                s.update(
+                                    meta.template.loc.start.index,
+                                    meta.template.loc.end.index,
+                                    `render: __render_${scopeHash}`
+                                );
+                            }
+                            if (insertedObj) {
+                                s.appendRight(arg.start!, '}');
                             }
                         }
                     }
@@ -217,9 +146,6 @@ export function ComponentScanPlugin(): Plugin {
                     map: s.generateMap()
                 };
             }
-        },
-        buildStart() {
-            ComponentMap.clear();
         }
     };
 }
@@ -229,13 +155,13 @@ async function getComponentMeta(
     classNode: ClassDeclaration,
     id: string,
     scopeHash: string,
-    ctx: TransformPluginContext,
-    s: MagicString,
+    ctx: PluginContext,
     imports: Record<string, ImportBinding>
 ): Promise<Partial<ComponentMeta>> {
-    const meta: Partial<ComponentMeta> = {};
-
-    let insertScopeId = false;
+    const meta: Partial<ComponentMeta> & Pick<ComponentMeta, 'deleteLocs' | 'preamble'> = {
+        deleteLocs: [],
+        preamble: ''
+    };
 
     for await (const prop of decoratorArg.properties) {
         if (!isObjectProperty(prop) || !isIdentifier(prop.key)) continue;
@@ -250,17 +176,13 @@ async function getComponentMeta(
             case 'templateUrl': {
                 if (!isLiteralType(prop.value)) break;
                 const tmplUrl = resolveString(prop.value);
-                const resolvedId = (await ctx.resolve(tmplUrl, id))?.id;
+                let resolvedId = (await ctx.resolve(tmplUrl, id))?.id;
                 if (!resolvedId) break;
-                s.prependLeft(
-                    classNode.start!,
-                    `import { render as __render_${scopeHash} } from ${JSON.stringify(
-                        resolvedId + `?prang&type=template&scopeId=${scopeHash}`
-                    )};\n`
-                );
-                s.update(prop.key.start!, prop.key.end!, 'render');
-                s.update(prop.value.start!, prop.value.end!, `__render_${scopeHash}`);
-                meta.template = resolvedId;
+                let importExp = resolvedId + `?prang&type=template&scopeId=${scopeHash}`;
+                importExp = `import { render as __render_${scopeHash} } from ${JSON.stringify(importExp)};\n`;
+
+                meta.preamble += importExp;
+                meta.template = { loc: prop.loc!, source: resolvedId };
                 break;
             }
             case 'template': {
@@ -268,14 +190,11 @@ async function getComponentMeta(
                 const templateString = resolveString(prop.value);
 
                 if (!templateString) break;
-                const tmplUrl = `${id}?prang&type=inline-template&scopeId=${scopeHash}`;
-                s.prependLeft(
-                    classNode.start!,
-                    `import { render as __render_${scopeHash} } from ${JSON.stringify(tmplUrl)};\n`
-                );
-                s.update(prop.key.start!, prop.key.end!, 'render');
-                s.update(prop.value.start!, prop.value.end!, `__render_${scopeHash}`);
-                meta.template = templateString;
+                let tmplUrl = `${id}?prang&type=inline-template&scopeId=${scopeHash}`;
+                tmplUrl = `import { render as __render_${scopeHash} } from ${JSON.stringify(tmplUrl)};\n`;
+
+                meta.preamble += tmplUrl;
+                meta.template = { loc: prop.loc!, source: templateString };
                 meta.inlineTemplate = true;
                 break;
             }
@@ -308,15 +227,19 @@ async function getComponentMeta(
                     .map((v) => (isTemplateLiteral(v) ? resolveTemplateLiteral(v) : resolveLiteral(v)?.toString()))
                     .filter((v) => v !== undefined);
 
-                urls.forEach(async (url) => {
-                    const resolved = await ctx.resolve(url, id);
-                    if (resolved) {
-                        const newUrl = resolved.id + `?prang&type=style&scopeId=${scopeHash}`;
-                        s.prependLeft(classNode.start!, `import ${JSON.stringify(newUrl)};\n`);
-                    }
-                });
-                insertScopeId = true;
-                s.remove(prop.start!, prop.end! + 1);
+                meta.styles ||= [];
+                await Promise.all(
+                    urls.map(async (url) => {
+                        const resolved = await ctx.resolve(url, id);
+                        if (resolved) {
+                            let newUrl = resolved.id + `?prang&type=style&scopeId=${scopeHash}`;
+                            newUrl = `import ${JSON.stringify(newUrl)};\n`;
+                            meta.styles!.push({ loc: prop.loc!, code: url });
+                            meta.preamble += newUrl;
+                        }
+                    })
+                );
+                meta.deleteLocs!.push(prop.loc!);
                 break;
             }
 
@@ -332,13 +255,11 @@ async function getComponentMeta(
                 meta.styles ||= [];
                 styles.forEach((style) => {
                     const index = meta.styles!.push(style);
-                    const tmplUrl = `${id}?prang&type=inline-style&scopeId=${scopeHash}&styleIndex=${
-                        index - 1
-                    }&lang.css`;
-                    s.prependLeft(classNode.start!, `import ${JSON.stringify(tmplUrl)};\n`);
+                    let tmplUrl = `${id}?prang&type=inline-style&scopeId=${scopeHash}&styleIndex=${index - 1}&lang.css`;
+                    tmplUrl = `import ${JSON.stringify(tmplUrl)};\n`;
+                    meta.preamble += tmplUrl;
                 });
-                insertScopeId = true;
-                s.remove(prop.start!, prop.end! + 1);
+                meta.deleteLocs.push(prop.loc!);
                 break;
             }
 
@@ -346,13 +267,174 @@ async function getComponentMeta(
                 break;
         }
     }
-
-    // Add the file path before the first property
-    const firstProp = decoratorArg.properties[0];
-    s.appendRight(
-        isObjectProperty(firstProp) ? firstProp.start! : decoratorArg.start!,
-        `fileUrl: ${JSON.stringify(path.relative(ctx.environment.config.root, id))},\n\t` +
-            (insertScopeId ? `scopeId: ${JSON.stringify(scopeHash)},\n\t` : '')
-    );
     return meta;
+}
+
+async function getModuleInfoFromID(rawId: string, ctx: PluginContext) {
+    const id = path.resolve(rawId);
+
+    const code = (await readFile(id)).toString();
+    if (!code.includes('@prang/core') || !code.includes('class')) {
+        return;
+    }
+
+    const ast = babelParse(code, path.extname(id), {
+        sourceType: 'module',
+        cache: true,
+        sourceFilename: id,
+        errorRecovery: true,
+        plugins: [
+            'jsx',
+            'typescript',
+            ['decorators', { allowCallParenthesized: true, decoratorsBeforeExport: true }],
+            'decoratorAutoAccessors',
+            'exportDefaultFrom',
+            'functionBind',
+            'importAssertions'
+        ]
+    });
+
+    let componentIdent: string = 'Component';
+
+    let classDeclarationIndex = -1;
+
+    const imports: Record<string, ImportBinding> = {};
+
+    await walkASTAsync(ast, {
+        enter: async (node, parent) => {
+            switch (node.type) {
+                case 'ImportDeclaration': {
+                    walkImportDeclaration(imports, node);
+                    break;
+                }
+                case 'ImportSpecifier': {
+                    if (
+                        isImportDeclaration(parent) &&
+                        parent.source.value === '@prang/core' &&
+                        isIdentifierOf(node.imported, 'Component')
+                    ) {
+                        componentIdent = node.local.name;
+                    }
+                    break;
+                }
+                case 'ClassDeclaration': {
+                    classDeclarationIndex++;
+                    if (!node.decorators || node.decorators.length == 0) return;
+                    for await (const decorator of node.decorators) {
+                        if (
+                            !isCallExpression(decorator.expression) ||
+                            !isIdentifierOf(decorator.expression.callee, componentIdent)
+                        )
+                            continue;
+
+                        let meta: ComponentMeta | undefined;
+                        const scopeHash = getHash(id + '#' + classDeclarationIndex);
+
+                        let arg: ObjectExpression | undefined = isObjectExpression(decorator.expression.arguments[0])
+                            ? decorator.expression.arguments[0]
+                            : undefined;
+
+                        if (!arg) {
+                            arg = objectExpression([]);
+                            arg.start = decorator.expression.end! - 1;
+                        }
+                        const newMeta = await getComponentMeta(arg, node, id, scopeHash, ctx, imports);
+                        if (newMeta) {
+                            meta = {
+                                preamble: '',
+                                deleteLocs: [],
+                                ...newMeta,
+                                sourceId: id,
+                                className: node.id ? resolveIdentifier(node.id)[0] : undefined,
+                                span: { start: node.start!, end: node.end! }
+                            };
+                        }
+
+                        if (meta) {
+                            ComponentMap.set(scopeHash, meta);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+function resolveProps(
+    decoratorArg: ObjectExpression,
+    node: ClassDeclaration,
+    s: MagicString,
+    imports: Record<string, ImportBinding>
+) {
+    const inputIdentifier = Object.values(imports).find(
+        (imp) => imp.source == '@prang/core' && imp.imported == 'input'
+    )?.local;
+    const outputIdentifier = Object.values(imports).find(
+        (imp) => imp.source == '@prang/core' && imp.imported == 'output'
+    )?.local;
+
+    const firstProp = decoratorArg.properties[0];
+    const decPropsStart = isObjectProperty(firstProp) ? firstProp.start! : decoratorArg.start!;
+
+    const inputs = new Set<Expression>();
+    const outputs = new Set<ClassProperty>();
+
+    for (const property of node.body.body) {
+        if (
+            !isClassProperty(property) ||
+            ![undefined, null, 'public'].includes(property.accessibility) ||
+            property.static
+        )
+            continue;
+        if (
+            inputIdentifier &&
+            isCallExpression(property.value) &&
+            isIdentifierOf(property.value.callee, inputIdentifier)
+        ) {
+            s.overwrite(property.value.callee.start!, property.value.callee.end!, '_compiledInput');
+            s.appendRight(
+                (property.value.typeParameters || property.value.callee).end! + 1,
+                JSON.stringify(toKeyAlias(property)) + (property.value.arguments.length ? ', ' : '')
+            );
+            inputs.add(property.key);
+
+            if (!('_compiledInput' in imports)) {
+                s.prepend(`import { compiledInput as _compiledInput } from '@prang/core/runtime';\n`);
+                // Not going to be used anyway
+                imports['_compiledInput'] = {} as any;
+            }
+        }
+        if (
+            outputIdentifier &&
+            isCallExpression(property.value) &&
+            isIdentifierOf(property.value.callee, outputIdentifier)
+        ) {
+            s.overwrite(property.value.callee.start!, property.value.callee.end!, '_compiledOutput');
+            s.appendRight(
+                (property.value.typeParameters || property.value.callee).end! + 1,
+                JSON.stringify(toKeyAlias(property)) + (property.value.arguments.length ? ', ' : '')
+            );
+            outputs.add(property);
+
+            if (!('_compiledOutput' in imports)) {
+                s.prepend(`import { compiledOutput as _compiledOutput } from '@prang/core/runtime';\n`);
+                // Not going to be used anyway
+                imports['_compiledOutput'] = {} as any;
+            }
+        }
+    }
+
+    if (inputs.size) {
+        s.appendRight(decPropsStart, `inputs: {`);
+        for (const input of inputs) {
+            s.appendRight(decPropsStart, s.original.slice(input.start!, input.end!) + ': {}');
+        }
+        s.appendRight(decPropsStart, `},\n\t`);
+    }
+    if (outputs.size) {
+        s.appendRight(decPropsStart, `outputs: [`);
+        for (const output of outputs) {
+            s.appendRight(decPropsStart, JSON.stringify(toKeyAlias(output)));
+        }
+        s.appendRight(decPropsStart, `],\n\t`);
+    }
 }
