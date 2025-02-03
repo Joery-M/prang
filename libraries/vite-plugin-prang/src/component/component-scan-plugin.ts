@@ -44,11 +44,13 @@ export function ComponentScanPlugin(): Plugin {
         enforce: 'pre',
         cacheKey: 'prang:component-scan',
         async load(id) {
-            if (id.includes('/node_modules/') || id.includes('?prang') || !/\.[tj]sx?$/.test(id)) return;
+            if (id.includes('\0') || id.includes('/node_modules/') || id.includes('?prang') || !/\.[tj]sx?$/.test(id))
+                return;
             await getModuleInfoFromID(id, this);
         },
         async transform(code, id) {
             if (
+                id.includes('\0') ||
                 id.includes('/node_modules/') ||
                 id.includes('?prang') ||
                 !code.includes('@prang/core') ||
