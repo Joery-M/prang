@@ -32,6 +32,7 @@ Look in `libraries/playground` for the current testing setup.
 - [ ] Services using decorator
 - [ ] Directives using decorator
 - [ ] NgModule equivalent
+- [ ] Injection
 
 ## Why
 
