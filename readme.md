@@ -41,6 +41,6 @@ Directives with `*` syntax:
 
 fun
 
-Real reason: Got annoyed at the fact that Angular requires the Typescript compiler, meaning they can't use the amazing performance of Vite, esbuild or Rolldown (in the future). I wanted to try my hand at learning how Vite plugins work.
+Real reason: Got annoyed at the fact that Angular requires the Typescript compiler, meaning they can't use the amazing performance of Vite, esbuild or Rolldown (in the future). So I set out to make a version without Typescript.
 
-Yes, I do also realise that this has come full circle: Angular syntax inspired Vue, Vue tooling is used for this version of Angular.
+Also, yes, I do realise that this has come full circle: Angular syntax inspired Vue, Vue tooling is used for this version of Angular.
