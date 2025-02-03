@@ -1,7 +1,7 @@
 import { onScopeDispose } from '@vue/reactivity';
 import type { UseObservableOptions } from '@vueuse/rxjs';
 import type { Observable } from 'rxjs';
-import { type ReadonlySignal, signal } from '..';
+import { type ReadonlySignal, signal } from '../signal';
 
 export function useObservable<H, I = undefined>(
     observable: Observable<H>,

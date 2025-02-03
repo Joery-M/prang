@@ -1,7 +1,7 @@
 import { onScopeDispose, watch } from '@vue/reactivity';
 import type { UseSubjectOptions } from '@vueuse/rxjs';
 import { BehaviorSubject, type Subject } from 'rxjs';
-import { signal, type Signal } from '..';
+import { signal, type Signal } from '../signal';
 
 export function useSubject<H>(subject: BehaviorSubject<H>, options?: UseSubjectOptions): Signal<H>;
 export function useSubject<H>(subject: Subject<H>, options?: UseSubjectOptions): Signal<H | undefined>;

@@ -12,8 +12,9 @@ import {
     type ComponentOptions,
     type DirectiveArguments,
     type VNode
-} from '@vue/runtime-core';
-import { isSignal, type Output, type ReadonlySignal } from '.';
+} from '@vue/runtime-dom';
+import { isSignal } from './internal';
+import type { Output, ReadonlySignal } from './signal';
 
 export * from '@vue/runtime-dom';
 

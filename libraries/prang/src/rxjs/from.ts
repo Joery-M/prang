@@ -1,8 +1,8 @@
 import type { MaybeRef, Ref, WatchOptions } from '@vue/reactivity';
 import { from as vuFrom, fromEvent as vuFromEvent } from '@vueuse/rxjs';
 import type { Observable, ObservableInput } from 'rxjs';
-import type { ReadonlySignal } from '..';
 import { ifSignalToRef } from '../internal';
+import type { ReadonlySignal } from '../signal';
 
 export function from<T>(
     signal: ReadonlySignal<T> | ObservableInput<T> | Ref<T>,

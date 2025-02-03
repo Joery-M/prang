@@ -1,4 +1,4 @@
-import { createApp } from 'vue';
+import { createApp } from '@vue/runtime-dom';
 
 export function bootstrapComponent(rootComponent: any, mountPoint: string) {
     const app = createApp(rootComponent);

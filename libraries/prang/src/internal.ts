@@ -1,7 +1,7 @@
-import type { ComponentOptions } from 'vue';
-import { isSignal, type ReadonlySignal } from '.';
+import { isRef, type ComponentOptions } from '@vue/runtime-dom';
+import type { ReadonlySignal, Signal } from './signal';
 
-export const SIGNAL_SOURCE = Symbol('Signal source');
+export const SIGNAL_SOURCE = '__v_Signal_source';
 export const COMPUTED_SIGNAL = Symbol('Signal');
 export const CLASS_COMPONENT = Symbol();
 export const PIPE = Symbol.for('pipe');
@@ -37,6 +37,10 @@ export function resolveSelector(value: ClassComponent | ClassPipe) {
         console.warn('Could not find selector for', value);
     }
     return map;
+}
+
+export function isSignal<T>(r: Signal<T> | unknown): r is Signal<T> {
+    return r ? isRef((r as any)[SIGNAL_SOURCE]) : false;
 }
 
 export function isInput<T>(r: ReadonlySignal<T> | unknown): r is ReadonlySignal<T> {
