@@ -6,9 +6,7 @@
 
 A "framework" (if you will) that looks like Angular, smells like Angular, but is actually Vue.
 
-- Components are defined as classes with a decorator
-- Signals can be used instead of refs
-- Built-in rxjs support (thanks vueuse!)
+Look in `libraries/playground` for the current testing setup.
 
 ## Features
 
