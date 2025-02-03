@@ -13,13 +13,9 @@ import {
     type DirectiveArguments,
     type VNode
 } from '@vue/runtime-core';
-import type { Output, ReadonlySignal, Signal } from '.';
+import { isSignal, type Output, type ReadonlySignal } from '.';
 
 export * from '@vue/runtime-dom';
-
-export function isSignal<T>(r: Signal<T> | unknown): r is Signal<T> {
-    return r ? (r as any)['__v_isSignal'] === true : false;
-}
 
 export function wrapReactiveClass<T extends object>(comp: T): T {
     const proxied = new Proxy(comp, {

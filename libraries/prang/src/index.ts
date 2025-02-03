@@ -12,6 +12,20 @@ export { Component } from './component';
 export * from './component/hooks';
 export { Pipe } from './pipe';
 
+// Re-export useful functions that work with signals
+export {
+    watch,
+    effect,
+    markRaw,
+    reactive,
+    isProxy,
+    isReactive,
+    isReadonly,
+    isRef,
+    isShallow,
+    toValue
+} from '@vue/reactivity';
+
 export type ReadonlySignal<T = any> = {
     (): T;
 };
@@ -38,6 +52,9 @@ export const signal = <T>(initialValue: T): Signal<T> => {
 
     return s;
 };
+export function isSignal<T>(r: Signal<T> | unknown): r is Signal<T> {
+    return r ? (r as any)['__v_isSignal'] === true : false;
+}
 
 export interface ComputedOptions<T> {
     equal?: (a: T, b: T) => boolean;
