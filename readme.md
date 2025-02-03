@@ -19,12 +19,9 @@ Look in `libraries/playground` for the current testing setup.
 - Components can have `input`s and `output`s
 - Inline templates and styles
 - `viewChild()`
-
-<br />
-
-Directives with `*` syntax:
-- `v-model="text"` > `*model="text"`
-- `v-if="condition"` > `*if="condition"`
+- Directives with `*` syntax:
+  - `v-model="text"` > `*model="text"`
+  - `v-if="condition"` > `*if="condition"`
 
 ## Plans
 
