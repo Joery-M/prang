@@ -23,8 +23,7 @@ export interface Output<T extends any | readonly any[]> {
     (...v: T extends Array<any> ? T : [T]): void;
 }
 
-export function signal<T>(initialValue: Ref<T>): Signal<ShallowUnwrapRef<T>>;
-export function signal<T>(initialValue: T): Signal<T>;
+export function signal<T>(initialValue: T): Signal<ShallowUnwrapRef<T>>;
 export function signal<T = any>(): Signal<T | undefined>;
 export function signal<T>(initialValue?: MaybeRef<T>): Signal<ShallowUnwrapRef<T>> {
     const r = shallowRef(initialValue);

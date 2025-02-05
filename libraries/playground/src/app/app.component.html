@@ -4,14 +4,13 @@
     style="flex-direction: column"
 >
     <p>{{ value() }}</p>
+    <!-- Basically same as {{ currency(computed()) }} -->
     <p>{{ computed() | this.currency }}</p>
 </div>
 <button @click="value.update(v => v + 1)">Increment</button>
 <button (click)="increment()">Increment</button>
 <br />
 <input type="range" min="0" max="100" *model.number="value" />
-
-<!-- {{ (text() + 'asdf') | capitalize }} -->
 
 <p *if="value() < 41">Less than 41</p>
 <p *else-if="value() == 41">Equals 41</p>
@@ -26,6 +25,9 @@
 <br />
 <br />
 
+<hr />
+<h2>Pipes</h2>
+
 <input type="text" *model="text" />
 <input type="text" v-model="text" />
 
@@ -38,6 +40,9 @@
 
 <display-text [value]="text()" />
 
+<hr />
+<h2>2 way binding</h2>
+
 <formatted-number v-model:value="numberValue" />
 <formatted-number [(value)]="numberValue" />
 <p>
@@ -45,3 +50,12 @@
     <span style="min-width: 50px; display: inline-block; text-align: center;">{{ numberValue() }}</span>
     <button (click)="numberValue.update(v => (v ?? 0) + 1)">+</button>
 </p>
+
+<hr />
+<h2>Shopping list example</h2>
+
+<button (click)="addShoppingItem()">Add item</button>
+<shopping-list/>
+<shopping-list/>
+
+<br *for="i in 10" />

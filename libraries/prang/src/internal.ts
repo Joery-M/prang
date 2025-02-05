@@ -1,10 +1,12 @@
-import { isRef, type ComponentOptions } from '@vue/runtime-dom';
+import { isRef, type ComponentInternalInstance, type ComponentOptions, type InjectionKey } from '@vue/runtime-dom';
 import type { ReadonlySignal, Signal } from './signal';
 
 export const SIGNAL_SOURCE = '__v_Signal_source';
-export const COMPUTED_SIGNAL = Symbol('Signal');
-export const CLASS_COMPONENT = Symbol();
-export const PIPE = Symbol.for('pipe');
+export const COMPUTED_SIGNAL = '__v_Computed_signal';
+export const CLASS_COMPONENT = '__v_Class_component';
+export const INJECTABLE_CLASS = '__v_Injectable_class';
+export const INJECTION_ID = '__vInjectionId';
+export const PIPE = '__v_Pipe';
 
 export interface ClassPipe {
     new (...args: any[]): any;
@@ -16,9 +18,17 @@ export interface ClassPipe {
 
 export interface ClassComponent {
     new (...args: any[]): any;
+    readonly __vInjectionId: InjectionKey<InstanceType<ClassComponent>>;
     __vccOpts: ComponentOptions;
     __vType?: typeof CLASS_COMPONENT;
     __vSelector?: string | string[];
+}
+
+export interface InjectableClass {
+    new (...args: any[]): any;
+    readonly __vInjectionId: unique symbol;
+    __vType?: typeof INJECTABLE_CLASS;
+    __vInit: (context?: ComponentInternalInstance) => void;
 }
 
 export type DefineModelOptions<T = any, G = T, S = T> = {

@@ -1,0 +1,17 @@
+<form>
+    <fieldset>
+        <template *for="item in shoppingListService.shoppingList()">
+            <input
+                type="radio"
+                name="item"
+                [id]="formId + '-' + item.name"
+                [checked]="shopping2Service.selected() === item.name"
+                (click)="shopping2Service.selected.set(item)"
+            />
+            <label [for]="formId + '-' + item.name">
+                {{ item.name }}
+            </label>
+        </template>
+    </fieldset>
+    <shopping-item-component *if="shopping2Service.selected()" />
+</form>

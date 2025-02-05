@@ -29,10 +29,10 @@ Look in `libraries/playground` for the current testing setup.
 - [x] 2 way binding
 - [ ] `contentChild()`
 - [ ] Template ref binding with `<comp #myComp />` (slot syntax will have to change)
-- [ ] Services using decorator
+- [x] Services using decorator
 - [ ] Directives using decorator
 - [ ] NgModule equivalent
-- [ ] Injection
+- [x] Injection
 
 ## Why
 

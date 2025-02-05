@@ -6,8 +6,8 @@ import {
     type AnyClassImport,
     type ClassComponent,
     type ClassPipe
-} from './internal';
-import { createCommentVNode, onBeforeUnmount, onMounted, watch, type Prop } from './runtime';
+} from '../internal';
+import { createCommentVNode, onBeforeUnmount, onMounted, provide, watch, type Prop } from '../runtime';
 
 export function Component(m?: ComponentMeta): Function {
     const meta = Object.assign(
@@ -36,6 +36,8 @@ export function Component(m?: ComponentMeta): Function {
         const componentName = [meta.selector].flat()[0];
         component.__vType = CLASS_COMPONENT;
         component.__vSelector = meta.selector;
+        // Name will change with minification, but its find
+        (component as any).__vInjectionId = Symbol(component.name);
 
         component.__vccOpts = {
             __name: componentName,
@@ -68,6 +70,7 @@ export function Component(m?: ComponentMeta): Function {
                 );
 
                 expose({ [CLASS_COMPONENT]: instance });
+                provide(component.__vInjectionId, instance);
                 return (_ctx: any, cache: any) => meta.render.call(instance, instance, cache);
             }
         };

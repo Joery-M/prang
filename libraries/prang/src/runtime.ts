@@ -15,7 +15,7 @@ import {
     type VNode
 } from '@vue/runtime-dom';
 import { EMPTY_OBJ, hasChanged, hyphenate } from '@vue/shared';
-import { isSignal, SIGNAL_SOURCE, type DefineModelOptions } from './internal';
+import { isSignal, PIPE, SIGNAL_SOURCE, type DefineModelOptions } from './internal';
 import { signal, type ModelSignal, type Output, type ReadonlySignal } from './signal';
 
 export * from '@vue/runtime-dom';
@@ -43,7 +43,7 @@ export function resolveFilter(name: string) {
             // global registration
             resolve((instance.appContext as any)[type], name);
 
-        if (typeof res === 'function' && res.__vType === Symbol.for('pipe')) {
+        if (typeof res === 'function' && res.__vType === PIPE) {
             if (!res.__vInstance) {
                 res.__vInstance = new res();
             }
