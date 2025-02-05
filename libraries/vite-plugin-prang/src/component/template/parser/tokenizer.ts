@@ -646,7 +646,11 @@ export default class Tokenizer {
         }
     }
     private handleAttrStart(c: number) {
-        if ((c === CharCodes.LowerV && this.peek() === CharCodes.Dash) || c === CharCodes.Star) {
+        if (
+            (c === CharCodes.LowerV && this.peek() === CharCodes.Dash) ||
+            c === CharCodes.Star ||
+            (c === CharCodes.LeftSquare && this.peek() === CharCodes.LeftParen)
+        ) {
             this.state = State.InDirName;
             this.sectionStart = this.index;
         } else if (
@@ -695,6 +699,14 @@ export default class Tokenizer {
             this.cbs.ondirname(this.sectionStart, this.index);
             this.state = State.InDirArg;
             this.sectionStart = this.index + 1;
+        } else if (
+            this.buffer.charCodeAt(this.sectionStart) === CharCodes.LeftSquare &&
+            this.buffer.charCodeAt(this.sectionStart + 1) === CharCodes.LeftParen &&
+            c === CharCodes.RightParen &&
+            this.peek() === CharCodes.RightSquare
+        ) {
+            this.cbs.ondirname(this.sectionStart, this.index + 2);
+            this.state = State.InDirArg;
         } else if (c === CharCodes.Dot) {
             this.cbs.ondirname(this.sectionStart, this.index);
             this.state = State.InDirModifier;
@@ -702,7 +714,12 @@ export default class Tokenizer {
         }
     }
     private stateInDirArg(c: number): void {
-        if ((c === CharCodes.RightSquare || c === CharCodes.RightParen) && this.peek() === CharCodes.Eq) {
+        if (this.buffer.charCodeAt(this.index - 1) === CharCodes.RightParen && c === CharCodes.RightSquare) {
+            // 2 way [(binding)]
+            this.cbs.ondirarg(this.sectionStart + 2, this.index - 1);
+            this.handleAttrNameEnd(c);
+            this.sectionStart = this.index + 1;
+        } else if ((c === CharCodes.RightSquare || c === CharCodes.RightParen) && this.peek() === CharCodes.Eq) {
             this.cbs.ondirarg(this.sectionStart, this.index);
             this.handleAttrNameEnd(c);
         } else if (c === CharCodes.Eq || isEndOfTagSection(c)) {

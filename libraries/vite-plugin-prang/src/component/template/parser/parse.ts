@@ -213,16 +213,32 @@ const tokenizer = new Tokenizer(stack, {
 
     ondirname(start, end) {
         const raw = getSlice(start, end);
-        const name =
-            raw === '.' || raw === ':' || raw === '['
-                ? 'bind'
-                : raw === '@' || raw === '('
-                ? 'on'
-                : raw === '#'
-                ? 'slot'
-                : raw.startsWith('*')
-                ? raw.slice(1)
-                : raw.slice(2);
+        let name: string;
+        switch (raw) {
+            case '[':
+            case ':':
+            case '.':
+                name = 'bind';
+                break;
+            case '@':
+            case '(':
+                name = 'on';
+                break;
+            case '#':
+                name = 'slot';
+                break;
+
+            default: {
+                if (raw.startsWith('*')) {
+                    name = raw.slice(1);
+                } else if (raw.startsWith('[(') && raw.endsWith(')]')) {
+                    name = 'model';
+                } else {
+                    name = raw.slice(2);
+                }
+                break;
+            }
+        }
 
         if (!inVPre && name === '') {
             emitError(ErrorCodes.X_MISSING_DIRECTIVE_NAME, start);

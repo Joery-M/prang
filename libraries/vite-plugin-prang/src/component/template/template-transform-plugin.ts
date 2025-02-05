@@ -100,6 +100,10 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
         runtimeModuleName: '@prang/core/runtime',
         scopeId
     });
+    // writeFileSync(
+    //     fileURLToPath(import.meta.resolve('./file_' + Date.now() + '.json')),
+    //     JSON.stringify(parsed, undefined, 4)
+    // );
 
     return {
         code: result.code,
