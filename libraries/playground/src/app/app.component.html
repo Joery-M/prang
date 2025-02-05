@@ -38,5 +38,9 @@
 
 <display-text [value]="text()" />
 
-<formatted-number (value)="numberValue.set($event)" />
-<p>{{ numberValue() }}</p>
+<formatted-number v-model:value="numberValue" />
+<p>
+    <button (click)="numberValue.update(v => (v ?? 0) - 1)">-</button>
+    <span style="min-width: 50px; display: inline-block; text-align: center;">{{ numberValue() }}</span>
+    <button (click)="numberValue.update(v => (v ?? 0) + 1)">+</button>
+</p>

@@ -14,7 +14,7 @@ export class AppComponent implements OnInit {
     btn1 = viewChild<ButtonComponent>('btn1');
     value = signal(0);
     text = signal(undefined);
-    numberValue = signal(10);
+    numberValue = signal();
 
     computed = computed(() => this.value() * 10);
 

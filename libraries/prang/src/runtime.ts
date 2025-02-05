@@ -3,7 +3,7 @@
  *
  * @license MIT
  */
-import { computed, ReactiveFlags, ref, shallowRef, toRefs, triggerRef, watch } from '@vue/reactivity';
+import { computed, ReactiveFlags, shallowRef, toRefs, triggerRef } from '@vue/reactivity';
 import {
     camelize,
     capitalize,
@@ -69,17 +69,13 @@ export function compiledInput<T>(propName: string, defaultValue?: T): ReadonlySi
     const inst = getCurrentInstance();
     if (!inst) throw new Error('Compiled input was called without active instance');
     const props = toRefs(inst.props);
-    const useDefault = ref(false);
-    if (defaultValue !== undefined) {
-        useDefault.value = true;
-        watch(props[propName], () => (useDefault.value = false), { once: true });
-    }
 
-    const r = computed<T>(() => (useDefault.value || !(propName in props) ? defaultValue : props[propName].value) as T);
+    const r = computed<T>(() => (props[propName] === undefined ? defaultValue : props[propName]) as T);
     const s = () => r.value;
 
     s['__v_isInput'] = true;
     s['__v_isInputCompiled'] = true;
+    s[SIGNAL_SOURCE] = r;
     s[ReactiveFlags.IS_READONLY] = true;
     s[ReactiveFlags.IS_SHALLOW] = true;
     return s;
@@ -109,13 +105,15 @@ export function compiledModel<T, G = T, S = T>(
 ): ModelSignal<G, S> {
     const i = getCurrentInstance()!;
     if (!i) {
-        console.warn(`useModel() called without active instance.`);
+        console.warn(`compiledModel() called without active instance.`);
         return signal() as any;
     }
 
     const camelizedName = camelize(name);
     if (!(i as any).propsOptions[0][camelizedName]) {
-        console.warn(`useModel() called with prop "${name}" which is not declared.`);
+        console.warn(
+            `compiledModel() called with prop "${name}" which is not declared. This should have been handled by the compiler.`
+        );
         return signal() as any;
     }
 
@@ -125,24 +123,18 @@ export function compiledModel<T, G = T, S = T>(
     let prevSetValue: any = EMPTY_OBJ;
     let prevEmittedValue: any;
 
-    let isCurrentlyDefault = defaultValue !== undefined;
-    i.props[camelizedName]!.default = defaultValue;
     const r = shallowRef(defaultValue);
 
     watchSyncEffect(() => {
         const propValue = i.props[camelizedName];
-        console.log('Changed?', r.value, propValue);
-        if (!isCurrentlyDefault && hasChanged(r.value, propValue)) {
-            r.value = propValue;
+        if (hasChanged(r.value, propValue)) {
+            r.value = propValue === undefined ? defaultValue : propValue;
         }
     });
     const s: any = () => {
-        console.log('GET', r.value);
         return options.get ? options.get(r.value) : r.value;
     };
     s.set = (value: any) => {
-        isCurrentlyDefault = false;
-        console.log('SET', value);
         const emittedValue = options.set ? options.set(value) : value;
         if (!hasChanged(emittedValue, r.value) && !(prevSetValue !== EMPTY_OBJ && hasChanged(value, prevSetValue))) {
             return;

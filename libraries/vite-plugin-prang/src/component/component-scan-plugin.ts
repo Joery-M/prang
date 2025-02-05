@@ -15,6 +15,7 @@ import {
     type Expression,
     type ObjectExpression
 } from '@babel/types';
+import { camelize } from '@vue/shared';
 import {
     babelParse,
     isIdentifierOf,
@@ -434,7 +435,7 @@ function resolveProps(
             const arg1 = property.value.arguments[0];
             const arg2 = property.value.arguments[1];
             models.add({
-                name: s.original.slice(property.key.start!, property.key.end!),
+                name: camelize(s.original.slice(property.key.start!, property.key.end!)),
                 default: arg1 ? { start: arg1.start!, end: arg1.end! } : undefined,
                 options: arg2 ? { start: arg2.start!, end: arg2.end! } : undefined
             });
