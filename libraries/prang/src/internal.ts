@@ -21,6 +21,11 @@ export interface ClassComponent {
     __vSelector?: string | string[];
 }
 
+export type DefineModelOptions<T = any, G = T, S = T> = {
+    get?: (v: T) => G;
+    set?: (v: S) => any;
+};
+
 type Arrayable<T> = T | T[];
 export type AnyClassImport = Arrayable<ClassComponent | ClassPipe>;
 

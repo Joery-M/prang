@@ -361,24 +361,42 @@ async function getModuleInfoFromID(rawId: string, ctx: PluginContext) {
         }
     });
 }
+
+interface ModelDefinition {
+    name: string;
+    default?: {
+        start: number;
+        end: number;
+    };
+    options?: {
+        start: number;
+        end: number;
+    };
+}
 function resolveProps(
     decoratorArg: ObjectExpression,
     node: ClassDeclaration,
     s: MagicString,
     imports: Record<string, ImportBinding>
 ) {
-    const inputIdentifier = Object.values(imports).find(
-        (imp) => imp.source == '@prang/core' && imp.imported == 'input'
-    )?.local;
-    const outputIdentifier = Object.values(imports).find(
-        (imp) => imp.source == '@prang/core' && imp.imported == 'output'
-    )?.local;
+    const importValues = Object.values(imports);
+    const inputIdentifier = importValues.find((imp) => imp.source == '@prang/core' && imp.imported == 'input')?.local;
+    const outputIdentifier = importValues.find((imp) => imp.source == '@prang/core' && imp.imported == 'output')?.local;
+    const modelIdentifier = importValues.find((imp) => imp.source == '@prang/core' && imp.imported == 'model')?.local;
 
     const firstProp = decoratorArg.properties[0];
     const decPropsStart = isObjectProperty(firstProp) ? firstProp.start! : decoratorArg.start!;
 
     const inputs = new Set<Expression>();
     const outputs = new Set<ClassProperty>();
+    const models = new Set<ModelDefinition>();
+
+    const importedHelpers = new Map<string, string>();
+    const importHelper = (helper: string) => {
+        const localVal = '_' + helper;
+        importedHelpers.set(helper, localVal);
+        return localVal;
+    };
 
     for (const property of node.body.body) {
         if (
@@ -387,56 +405,86 @@ function resolveProps(
             property.static
         )
             continue;
+        // Input
         if (
             inputIdentifier &&
             isCallExpression(property.value) &&
             isIdentifierOf(property.value.callee, inputIdentifier)
         ) {
-            s.overwrite(property.value.callee.start!, property.value.callee.end!, '_compiledInput');
+            const localVal = importHelper('compiledInput');
+            s.overwrite(property.value.callee.start!, property.value.callee.end!, localVal);
             s.appendRight(
                 (property.value.typeParameters || property.value.callee).end! + 1,
                 JSON.stringify(toKeyAlias(property)) + (property.value.arguments.length ? ', ' : '')
             );
             inputs.add(property.key);
-
-            if (!('_compiledInput' in imports)) {
-                s.prepend(`import { compiledInput as _compiledInput } from '@prang/core/runtime';\n`);
-                // Not going to be used anyway
-                imports['_compiledInput'] = {} as any;
-            }
         }
+        // Model
+        if (
+            modelIdentifier &&
+            isCallExpression(property.value) &&
+            isIdentifierOf(property.value.callee, modelIdentifier)
+        ) {
+            const localVal = importHelper('compiledModel');
+            s.overwrite(property.value.callee.start!, property.value.callee.end!, localVal);
+            s.appendRight(
+                (property.value.typeParameters || property.value.callee).end! + 1,
+                JSON.stringify(toKeyAlias(property)) + (property.value.arguments.length ? ', ' : '')
+            );
+            const arg1 = property.value.arguments[0];
+            const arg2 = property.value.arguments[1];
+            models.add({
+                name: s.original.slice(property.key.start!, property.key.end!),
+                default: arg1 ? { start: arg1.start!, end: arg1.end! } : undefined,
+                options: arg2 ? { start: arg2.start!, end: arg2.end! } : undefined
+            });
+        }
+        // Output
         if (
             outputIdentifier &&
             isCallExpression(property.value) &&
             isIdentifierOf(property.value.callee, outputIdentifier)
         ) {
-            s.overwrite(property.value.callee.start!, property.value.callee.end!, '_compiledOutput');
+            const localVal = importHelper('compiledOutput');
+            s.overwrite(property.value.callee.start!, property.value.callee.end!, localVal);
             s.appendRight(
                 (property.value.typeParameters || property.value.callee).end! + 1,
                 JSON.stringify(toKeyAlias(property)) + (property.value.arguments.length ? ', ' : '')
             );
             outputs.add(property);
-
-            if (!('_compiledOutput' in imports)) {
-                s.prepend(`import { compiledOutput as _compiledOutput } from '@prang/core/runtime';\n`);
-                // Not going to be used anyway
-                imports['_compiledOutput'] = {} as any;
-            }
         }
     }
 
-    if (inputs.size) {
-        s.appendRight(decPropsStart, `inputs: {`);
+    if (inputs.size || models.size) {
+        s.appendRight(decPropsStart, `inputs: {\n\t`);
         for (const input of inputs) {
-            s.appendRight(decPropsStart, s.original.slice(input.start!, input.end!) + ': {}');
+            s.appendRight(decPropsStart, '\t' + s.original.slice(input.start!, input.end!) + ': {},\n\t');
+        }
+        for (const model of models) {
+            s.appendRight(decPropsStart, '\t' + JSON.stringify(model.name) + ': {},\n\t');
+            s.appendRight(decPropsStart, '\t' + JSON.stringify(model.name + 'Modifiers') + ': {},\n\t');
         }
         s.appendRight(decPropsStart, `},\n\t`);
     }
-    if (outputs.size) {
-        s.appendRight(decPropsStart, `outputs: [`);
+
+    if (outputs.size || models.size) {
+        s.appendRight(decPropsStart, `outputs: [\n\t`);
         for (const output of outputs) {
-            s.appendRight(decPropsStart, JSON.stringify(toKeyAlias(output)));
+            s.appendRight(decPropsStart, '\t' + JSON.stringify(toKeyAlias(output)) + '\n\t');
+        }
+        for (const model of models) {
+            s.appendRight(decPropsStart, '\t' + JSON.stringify('update:' + model.name) + '\n\t');
         }
         s.appendRight(decPropsStart, `],\n\t`);
+    }
+
+    if (importedHelpers.size) {
+        s.appendRight(0, `import { `);
+        for (const [helper, localVal] of importedHelpers) {
+            s.appendRight(0, `${helper} as ${localVal}, `);
+            // Not going to be used anyway
+            imports[localVal] = {} as any;
+        }
+        s.appendRight(0, ` } from '@prang/core/runtime';\n`);
     }
 }

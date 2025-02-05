@@ -7,13 +7,18 @@ import {
     type ShallowUnwrapRef
 } from '@vue/reactivity';
 import { useTemplateRef } from '@vue/runtime-dom';
-import { CLASS_COMPONENT, SIGNAL_SOURCE } from './internal';
+import { NOOP } from '@vue/shared';
+import { CLASS_COMPONENT, SIGNAL_SOURCE, type DefineModelOptions } from './internal';
 
 export type ReadonlySignal<T = any> = () => T;
-export type Signal<T = any> = ReadonlySignal<T> & {
-    set: (value: T) => void;
-    update: (updater: (original: T) => T) => void;
-};
+export interface Signal<T = any, S = T> extends ReadonlySignal<T> {
+    set: (value: S) => void;
+    update: (updater: (original: T) => S) => void;
+}
+export interface ModelSignal<T, S = T> extends Signal<T, S> {
+    [Symbol.iterator](): Iterator<Signal<T, S>>;
+}
+
 export interface Output<T extends any | readonly any[]> {
     (...v: T extends Array<any> ? T : [T]): void;
 }
@@ -55,24 +60,33 @@ export function computed<T>(fn: () => T, opts?: ComputedOptions<T>): ReadonlySig
     });
     const s: any = () => c.value;
     s[SIGNAL_SOURCE] = c;
+    s[ReactiveFlags.IS_READONLY] = true;
     return s;
 }
 
 export function input<T>(): ReadonlySignal<T | undefined>;
 export function input<T>(defaultValue: T): ReadonlySignal<T>;
 export function input<T>(defaultValue?: T): ReadonlySignal<T> {
-    const r = shallowRef(defaultValue);
-    const s = () => r.value;
-
-    s['set'] = (newVal: T) => (r.value = newVal);
-    s['__v_isInput'] = true;
-    s[ReactiveFlags.IS_READONLY] = true;
-    s[ReactiveFlags.IS_SHALLOW] = true;
-    return s;
+    console.warn(
+        'input(defaultValue) is a compiler macro that should be transformed to compiledInput(propName, defaultValue) from "@prang/core/runtime"'
+    );
+    return NOOP as ReadonlySignal<T>;
 }
 
 export function output<T extends any | readonly any[] = any>(): Output<T> {
-    return (...args: T extends Array<any> ? T : [T]) => {};
+    console.warn(
+        'output() is a compiler macro that should be transformed to compiledOutput(propName) from "@prang/core/runtime"'
+    );
+    return NOOP as Output<T>;
+}
+
+export function model<T>(): Signal<T | undefined>;
+export function model<T, G = T, S = T>(defaultValue: T, options?: DefineModelOptions<T, G, S>): ModelSignal<G, S>;
+export function model<T, G = T, S = T>(defaultValue?: T, options?: DefineModelOptions<T, G, S>): ModelSignal<G, S> {
+    console.warn(
+        'model(defaultValue) is a compiler macro that should be transformed to compiledModel(propName, defaultValue) from "@prang/core/runtime"'
+    );
+    return NOOP as ModelSignal<G, S>;
 }
 
 export function viewChild<T = any>(selector: string) {
@@ -83,6 +97,5 @@ export function viewChild<T = any>(selector: string) {
         return val && CLASS_COMPONENT in val ? (val[CLASS_COMPONENT] as T) : val;
     };
     s[ReactiveFlags.IS_READONLY] = true;
-    s[ReactiveFlags.IS_SHALLOW] = true;
     return s as ReadonlySignal<T | null>;
 }

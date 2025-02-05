@@ -1,6 +1,7 @@
 import {
     BindingTypes,
     ConstantTypes,
+    createCallExpression,
     createCompilerError,
     createCompoundExpression,
     createObjectProperty,
@@ -29,6 +30,8 @@ import {
     V_MODEL_SELECT,
     V_MODEL_TEXT
 } from '@vue/compiler-dom';
+import { walk } from '@vue/compiler-sfc';
+import { extractIdentifiers, walkAST } from 'ast-kit';
 
 const __DEV__ = true;
 

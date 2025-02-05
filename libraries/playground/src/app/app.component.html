@@ -37,3 +37,6 @@
 <button (click)="text.set('asdf')">Set to 'asdf'</button>
 
 <display-text [value]="text()" />
+
+<formatted-number (value)="numberValue.set($event)" />
+<p>{{ numberValue() }}</p>

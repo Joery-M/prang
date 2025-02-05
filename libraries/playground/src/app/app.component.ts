@@ -3,16 +3,18 @@ import { onBeforeUnmount } from '@prang/core/runtime';
 import ButtonComponent from './button/button.component';
 import { Capitalize } from './capitalize.pipe';
 import DisplayComponent from './display/display.component';
+import { FormattedNumber } from './formatted-number/formatted-number.component';
 
 @Component({
     selector: 'app-component',
     templateUrl: './app.component.html',
-    imports: [ButtonComponent, Capitalize, DisplayComponent]
+    imports: [ButtonComponent, Capitalize, DisplayComponent, FormattedNumber]
 })
 export class AppComponent implements OnInit {
     btn1 = viewChild<ButtonComponent>('btn1');
     value = signal(0);
     text = signal(undefined);
+    numberValue = signal(10);
 
     computed = computed(() => this.value() * 10);
 
