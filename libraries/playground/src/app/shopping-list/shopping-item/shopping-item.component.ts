@@ -1,6 +1,5 @@
 import { Component, inject } from '@prang/core';
 import { Shopping2Service } from '../shopping-2.service';
-import { ShoppingListComponent } from '../shopping-list.component';
 import { ShoppingListService } from '../shopping.service';
 
 @Component({
@@ -13,9 +12,4 @@ import { ShoppingListService } from '../shopping.service';
 export class ShoppingItemComponent {
     shopping2Service = inject(Shopping2Service);
     shoppingListService = inject(ShoppingListService);
-
-    constructor() {
-        const comp = inject(ShoppingListComponent);
-        console.log(comp);
-    }
 }

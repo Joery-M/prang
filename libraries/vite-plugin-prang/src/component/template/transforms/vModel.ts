@@ -6,6 +6,7 @@ import {
     createObjectProperty,
     createSimpleExpression,
     DOMErrorCodes,
+    DOMErrorMessages,
     ElementTypes,
     ErrorCodes,
     findDir,
@@ -160,14 +161,15 @@ export const transformModel: DirectiveTransform = (dir, node, context) => {
     }
 
     if (dir.arg) {
-        console.log(dir);
-        context.onError(createCompilerError(DOMErrorCodes.X_V_MODEL_ARG_ON_ELEMENT, dir.arg.loc));
+        context.onError(createCompilerError(DOMErrorCodes.X_V_MODEL_ARG_ON_ELEMENT, dir.arg.loc, DOMErrorMessages));
     }
 
     function checkDuplicatedValue() {
         const value = findDir(node, 'bind');
         if (value && isStaticArgOf(value.arg, 'value')) {
-            context.onError(createCompilerError(DOMErrorCodes.X_V_MODEL_UNNECESSARY_VALUE, value.loc));
+            context.onError(
+                createCompilerError(DOMErrorCodes.X_V_MODEL_UNNECESSARY_VALUE, value.loc, DOMErrorMessages)
+            );
         }
     }
 
@@ -193,7 +195,11 @@ export const transformModel: DirectiveTransform = (dir, node, context) => {
                         case 'file':
                             isInvalidType = true;
                             context.onError(
-                                createCompilerError(DOMErrorCodes.X_V_MODEL_ON_FILE_INPUT_ELEMENT, dir.loc)
+                                createCompilerError(
+                                    DOMErrorCodes.X_V_MODEL_ON_FILE_INPUT_ELEMENT,
+                                    dir.loc,
+                                    DOMErrorMessages
+                                )
                             );
                             break;
                         default:
@@ -223,7 +229,7 @@ export const transformModel: DirectiveTransform = (dir, node, context) => {
             baseResult.needRuntime = context.helper(directiveToUse);
         }
     } else {
-        context.onError(createCompilerError(DOMErrorCodes.X_V_MODEL_ON_INVALID_ELEMENT, dir.loc));
+        context.onError(createCompilerError(DOMErrorCodes.X_V_MODEL_ON_INVALID_ELEMENT, dir.loc, DOMErrorMessages));
     }
 
     // native vmodel doesn't need the `modelValue` props since they are also

@@ -97,7 +97,7 @@ async function compileStyle(
         });
         return;
     }
-    // console.log(result.code);
+
     const map = result.map
         ? await formatPostcssSourceMap(
               // version property of result.map is declared as string
