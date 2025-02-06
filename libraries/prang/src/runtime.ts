@@ -37,7 +37,7 @@ export function wrapClassComponent(component: InstanceType<ClassComponent>) {
             return Reflect.get(target, p, receiver);
         },
         set(target, p: string, newValue, receiver) {
-            if (typeof target[p] === 'object' && '__v_viewChild' in target[p]) {
+            if (typeof target[p] === 'function' && '__v_viewChild' in target[p]) {
                 i.refs ||= {};
                 i.refs[p] = newValue;
                 return true;

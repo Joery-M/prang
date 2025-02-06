@@ -1,4 +1,9 @@
-import { generate, getBaseTransformPreset, transform } from '@vue/compiler-core';
+import {
+    generate,
+    getBaseTransformPreset,
+    transform,
+    transformExpression as vTransformExpression
+} from '@vue/compiler-core';
 import MagicString from 'magic-string';
 import { basename } from 'pathe';
 import { type SourceMapInput } from 'rollup';
@@ -8,6 +13,7 @@ import { dedent, parseTemplateRequest, stry } from '../../utils';
 import { baseParse } from './parser/parse';
 import { importedComponentTransform } from './transforms/importedComponent';
 import { thisCallTransform } from './transforms/thisCall';
+import { transformExpression } from './transforms/transformExpression';
 import { transformPipe } from './transforms/transformPipe';
 import { transformModel } from './transforms/vModel';
 
@@ -63,6 +69,8 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
     const prefixIdentifiers = true;
 
     const [nodeTransforms, directiveTransforms] = getBaseTransformPreset(prefixIdentifiers);
+    const expIndex = nodeTransforms.indexOf(vTransformExpression);
+    nodeTransforms[expIndex] = transformExpression;
 
     const parsed = baseParse(code, {
         parseMode: 'base',
@@ -112,7 +120,6 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
             import.meta.hot.accept(mod => {
                 if (!mod) return;
                 const { render: updated } = mod;
-                console.log('template update')
                 __VUE_HMR_RUNTIME__.rerender(${stry(scopeId)}, updated);
             })
         `

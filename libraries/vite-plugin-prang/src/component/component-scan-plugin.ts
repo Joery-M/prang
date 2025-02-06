@@ -20,6 +20,7 @@ import { BindingTypes, type BindingMetadata } from '@vue/compiler-core';
 import { camelize } from '@vue/shared';
 import {
     babelParse,
+    isCallOf,
     isIdentifierOf,
     isLiteralType,
     parseCache,
@@ -130,7 +131,8 @@ export function ComponentScanPlugin(): Plugin {
                             const propsResult = resolveProps(node, s, imports, helper);
 
                             for (const deleteLoc of meta.deleteLocs) {
-                                s.remove(deleteLoc.start.index, deleteLoc.end.index);
+                                const charAfter = s.original.charAt(deleteLoc.end.index);
+                                s.remove(deleteLoc.start.index, deleteLoc.end.index + (charAfter === ',' ? 1 : 0));
                             }
 
                             // Add preample
@@ -184,7 +186,7 @@ export function ComponentScanPlugin(): Plugin {
                                 import.meta.hot.accept(mod => {
                                     if (!mod) return;
                                     const { ${meta.className}: updated } = mod;
-                                    __VUE_HMR_RUNTIME__.reload(updated.__hmrId, updated);
+                                    __VUE_HMR_RUNTIME__.reload(${stry(scopeId)}, updated);
                                 })
                                 `
                                 );
@@ -261,6 +263,7 @@ export async function getComponentMeta(
 
                 meta.preamble += importExp;
                 meta.template = { loc: prop.loc!, source: resolvedId };
+                meta.deleteLocs.push(prop.loc!);
                 break;
             }
             case 'template': {
@@ -274,6 +277,7 @@ export async function getComponentMeta(
                 meta.preamble += tmplUrl;
                 meta.template = { loc: prop.loc!, source: templateString };
                 meta.inlineTemplate = true;
+                meta.deleteLocs.push(prop.loc!);
                 break;
             }
 
@@ -411,7 +415,7 @@ async function getModuleInfoFromCode(code: string, id: string, ctx: PluginContex
                             decArg.start = decorator.expression.end! - 1;
                         }
                         const meta = await getComponentMeta(decArg, node, id, scopeHash, imports, ctx);
-                        meta.bindings = resolveBindings(node);
+                        meta.bindings = resolveBindings(node, imports);
 
                         if (meta) {
                             curComponentMap[scopeHash] = meta;
@@ -536,7 +540,17 @@ function resolveProps(
     return results;
 }
 
-function resolveBindings(classNode: ClassDeclaration) {
+function resolveBindings(classNode: ClassDeclaration, imports: Record<string, ImportBinding>) {
+    const getImportBinding = (name: string) => {
+        return Object.values(imports).find((imp) => imp.source == '@prang/core' && imp.imported == name)?.local;
+    };
+    const input = getImportBinding('input');
+    const model = getImportBinding('model');
+    const signal = getImportBinding('signal');
+    const viewChild = getImportBinding('viewChild');
+    const computed = getImportBinding('computed');
+    const signalProps = [input, model, signal, viewChild, computed].filter((v) => v !== undefined);
+
     const bindings: BindingMetadata = {};
     walkAST(classNode, {
         enter(node, parent) {
@@ -557,7 +571,11 @@ function resolveBindings(classNode: ClassDeclaration) {
                 (isIdentifier(node.key) || isLiteral(node.key))
             ) {
                 const name = resolveString(node.key);
-                bindings[name] = BindingTypes.SETUP_CONST;
+                if (isCallOf(node.value, signalProps)) {
+                    bindings[name] = BindingTypes.SETUP_SIGNAL;
+                } else {
+                    bindings[name] = BindingTypes.SETUP_CONST;
+                }
             }
         }
     });

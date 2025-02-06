@@ -90,6 +90,9 @@ export function viewChild<T = any>(selector: string) {
     const s = () => template.value;
     s[SIGNAL_SOURCE] = template;
     s[ReactiveFlags.IS_READONLY] = true;
+    // Stop runtime from complaining
+    s[ReactiveFlags.IS_REF] = true;
+    s[ReactiveFlags.RAW] = true;
     s['__v_viewChild'] = true;
     return s as ReadonlySignal<T | null>;
 }

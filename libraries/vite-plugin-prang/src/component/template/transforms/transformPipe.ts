@@ -126,7 +126,6 @@ function transformBinaryExp(exp: BinaryExpression, context: TransformContext) {
                     return callExpression(cur.property, [prev]);
                 }
             }
-            console.log(cur);
             return callExpression(cur, [prev]);
         } else if (isCallExpression(cur)) {
             // If its a direct identifier, assume its an imported pipe
