@@ -7,7 +7,7 @@ import {
 } from '@vue/reactivity';
 import { useTemplateRef } from '@vue/runtime-dom';
 import { NOOP } from '@vue/shared';
-import { CLASS_COMPONENT, SIGNAL_SOURCE, type DefineModelOptions } from './internal';
+import { SIGNAL_SOURCE, type DefineModelOptions } from './internal';
 
 export type ReadonlySignal<T = any> = () => T;
 export interface Signal<T = any, S = T> extends ReadonlySignal<T> {
@@ -34,8 +34,6 @@ export function signal<T>(initialValue?: MaybeRef<T>): Signal<ShallowUnwrapRef<T
         r.value = updater(r.value);
     };
     s[SIGNAL_SOURCE] = r;
-    s[ReactiveFlags.IS_REF] = true;
-    s[ReactiveFlags.IS_SHALLOW] = true;
 
     return s;
 }
@@ -58,7 +56,6 @@ export function computed<T>(fn: () => T, opts?: ComputedOptions<T>): ReadonlySig
     });
     const s: any = () => c.value;
     s[SIGNAL_SOURCE] = c;
-    s[ReactiveFlags.IS_READONLY] = true;
     return s;
 }
 
@@ -90,10 +87,9 @@ export function model<T, G = T, S = T>(defaultValue?: T, options?: DefineModelOp
 export function viewChild<T = any>(selector: string) {
     const template = useTemplateRef<T>(selector);
 
-    const s = () => {
-        const val = template.value as any;
-        return val && CLASS_COMPONENT in val ? (val[CLASS_COMPONENT] as T) : val;
-    };
+    const s = () => template.value;
+    s[SIGNAL_SOURCE] = template;
     s[ReactiveFlags.IS_READONLY] = true;
+    s['__v_viewChild'] = true;
     return s as ReadonlySignal<T | null>;
 }

@@ -1,6 +1,7 @@
 import {
     isArrayExpression,
     isCallExpression,
+    isClassMethod,
     isClassProperty,
     isIdentifier,
     isImportDeclaration,
@@ -15,9 +16,11 @@ import {
     type Expression,
     type ObjectExpression
 } from '@babel/types';
+import { BindingTypes, type BindingMetadata } from '@vue/compiler-core';
 import { camelize } from '@vue/shared';
 import {
     babelParse,
+    isCallOf,
     isIdentifierOf,
     isLiteralType,
     parseCache,
@@ -25,6 +28,7 @@ import {
     resolveLiteral,
     resolveString,
     resolveTemplateLiteral,
+    walkAST,
     walkASTAsync,
     walkImportDeclaration,
     type ImportBinding
@@ -89,8 +93,9 @@ export function ComponentScanPlugin(): Plugin {
             let classDeclarationIndex = -1;
 
             const importedHelpers = new Map<string, string>();
-            await walkASTAsync(ast, {
-                enter: async (node) => {
+            const ctx = this;
+            walkAST(ast, {
+                enter(node) {
                     switch (node.type) {
                         case 'ImportDeclaration': {
                             walkImportDeclaration(imports, node);
@@ -134,7 +139,20 @@ export function ComponentScanPlugin(): Plugin {
                                 s.appendRight(arg.start!, '}');
                             }
 
-                            const filePath = stry(path.relative(this.environment.config.root, id));
+                            // Convert class methods into function expressions
+                            // node.body.body.forEach((prop) => {
+                            //     if (!isClassMethod(prop) || (isIdentifier(prop.key) && prop.key.name === 'constructor'))
+                            //         return;
+
+                            //     prop.params.forEach((param, i) => {
+                            //         if (isTSParameterProperty(param)) {
+                            //             s.update(param.start!, param.end!, '__' + i);
+                            //         }
+                            //     });
+                            //     s.appendRight(prop.key.end!, ' = function');
+                            // });
+
+                            const filePath = stry(path.relative(ctx.environment.config.root, id));
 
                             s.appendRight(
                                 node.end! - 1,
@@ -146,25 +164,27 @@ export function ComponentScanPlugin(): Plugin {
                                     this.__vccOpts = {
                                         __file: ${filePath},
                                         __scopeId: ${stry('data-v-' + scopeId)},
+                                        __hmrId: ${stry(scopeId)},
                                         props: ${propsResult.inputs || '{}'},
                                         emits: ${propsResult.outputs || '[]'},
+                                        __test: true,
                                         setup: (_p, { expose }) => {
-                                            console.log('init')
-                                            const instance = new this();
+                                            const instance = ${helper('wrapClassComponent')}(new this());
                                             if ('onInit' in instance && typeof instance['onInit'] === 'function')
                                                 ${helper('onMounted')}(() => instance.onInit());
                                             if ('onDestroy' in instance && typeof instance['onDestroy'] === 'function')
                                                 ${helper('onBeforeUnmount')}(() => instance.onDestroy());
                             
-                                            expose({ [${helper('CLASS_COMPONENT')}]: instance });
-                                            ${helper('provide')}(this.__vInjectionId, instance);
-                                            return (_ctx: any, cache: any) => __render_${scopeId}.call(instance, instance, cache);
-                                        }
+                                            expose(instance);
+                                            return instance;
+                                        },
+                                        render: __render_${scopeId}
                                     };
                                 }\n
                                 `
                             );
 
+                            // Append HMR
                             s.appendRight(
                                 node.end!,
                                 dedent`
@@ -177,8 +197,6 @@ export function ComponentScanPlugin(): Plugin {
                                 import.meta.hot.accept(mod => {
                                     if (!mod) return;
                                     const { ${meta.className}: updated } = mod;
-                                    console.log(updated.__hmrId, updated)
-                                    Object.assign(${meta.className}.__vccOpts, updated.__vccOpts)
                                     __VUE_HMR_RUNTIME__.reload(updated.__hmrId, updated);
                                 })
                                 `
@@ -231,7 +249,8 @@ export async function getComponentMeta(
         deleteLocs: [],
         preamble: '',
         sourceId: id,
-        className
+        className,
+        bindings: {}
     };
 
     for await (const prop of decoratorArg.properties) {
@@ -404,6 +423,7 @@ async function getModuleInfoFromCode(code: string, id: string, ctx: PluginContex
                             decArg.start = decorator.expression.end! - 1;
                         }
                         const meta = await getComponentMeta(decArg, node, id, scopeHash, imports, ctx);
+                        meta.bindings = resolveBindings(node, imports);
 
                         if (meta) {
                             curComponentMap[scopeHash] = meta;
@@ -526,4 +546,62 @@ function resolveProps(
         results.outputs += `]`;
     }
     return results;
+}
+
+function resolveBindings(classNode: ClassDeclaration, imports: Record<string, ImportBinding>) {
+    const getImportBinding = (name: string) => {
+        return Object.values(imports).find((imp) => imp.source == '@prang/core' && imp.imported == name)?.local;
+    };
+    const input = getImportBinding('input');
+    const output = getImportBinding('output');
+    const model = getImportBinding('model');
+    const signal = getImportBinding('signal');
+    const viewChild = getImportBinding('viewChild');
+    const computed = getImportBinding('computed');
+
+    const bindings: BindingMetadata = {};
+    walkAST(classNode, {
+        enter(node, parent) {
+            if (
+                isClassMethod(node) &&
+                parent === classNode.body &&
+                node.accessibility !== 'private' &&
+                (isIdentifier(node.key) || isLiteral(node.key))
+            ) {
+                const name = resolveString(node.key);
+                if (name === 'constructor') return;
+
+                bindings[name] = BindingTypes.SETUP_CONST;
+            } else if (
+                isClassProperty(node) &&
+                parent === classNode.body &&
+                node.accessibility !== 'private' &&
+                (isIdentifier(node.key) || isLiteral(node.key))
+            ) {
+                if (input && isCallOf(node.value, input)) {
+                    const name = resolveString(node.key);
+                    bindings[name] = BindingTypes.SETUP_REACTIVE_CONST;
+                } else if (output && isCallOf(node.value, output)) {
+                    const name = resolveString(node.key);
+                    bindings[name] = BindingTypes.SETUP_REACTIVE_CONST;
+                } else if (model && isCallOf(node.value, model)) {
+                    const name = resolveString(node.key);
+                    bindings[name] = BindingTypes.SETUP_SIGNAL;
+                } else if (signal && isCallOf(node.value, signal)) {
+                    const name = resolveString(node.key);
+                    bindings[name] = BindingTypes.SETUP_SIGNAL;
+                } else if (computed && isCallOf(node.value, computed)) {
+                    const name = resolveString(node.key);
+                    bindings[name] = BindingTypes.SETUP_REACTIVE_CONST;
+                } else if (viewChild && isCallOf(node.value, viewChild)) {
+                    const name = resolveString(node.key);
+                    bindings[name] = BindingTypes.SETUP_MAYBE_REF;
+                } else {
+                    const name = resolveString(node.key);
+                    bindings[name] = BindingTypes.SETUP_CONST;
+                }
+            }
+        }
+    });
+    return bindings;
 }

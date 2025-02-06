@@ -15,11 +15,47 @@ import {
     type VNode
 } from '@vue/runtime-dom';
 import { EMPTY_OBJ, hasChanged, hyphenate } from '@vue/shared';
-import { isSignal, PIPE, SIGNAL_SOURCE, type DefineModelOptions } from './internal';
+import {
+    CLASS_COMPONENT,
+    isSignal,
+    PIPE,
+    SIGNAL_SOURCE,
+    type ClassComponent,
+    type DefineModelOptions
+} from './internal';
 import { signal, type ModelSignal, type Output, type ReadonlySignal } from './signal';
 
 export * from '@vue/runtime-dom';
 export { CLASS_COMPONENT } from './internal';
+
+export function wrapClassComponent(component: InstanceType<ClassComponent>) {
+    const i = getCurrentInstance()!;
+    return new Proxy(component, {
+        get(target, p, receiver) {
+            if (p === '__isScriptSetup' || p === CLASS_COMPONENT) {
+                return true;
+            }
+            // console.log(p);
+            return Reflect.get(target, p, receiver);
+        },
+        apply(target, thisArg, argArray) {
+            console.log(target);
+            return Reflect.apply(target, thisArg, argArray);
+        },
+        set(target, p: string, newValue, receiver) {
+            if ('__v_viewChild' in target[p]) {
+                i.refs ||= {};
+                i.refs[p] = newValue;
+                return true;
+            }
+            if (isSignal(target[p])) {
+                target[p].set(newValue);
+                return true;
+            }
+            return Reflect.set(target, p, newValue, receiver);
+        }
+    });
+}
 
 export function withDirectives<T extends VNode>(vnode: T, directives: DirectiveArguments) {
     for (const dir of directives) {
@@ -71,7 +107,7 @@ export function compiledInput<T>(propName: string, defaultValue?: T): ReadonlySi
     if (!inst) throw new Error('Compiled input was called without active instance');
     const props = toRefs(inst.props);
 
-    const r = computed<T>(() => (props[propName] === undefined ? defaultValue : props[propName]) as T);
+    const r = computed<T>(() => (props[propName].value === undefined ? defaultValue : props[propName].value) as T);
     const s = () => r.value;
 
     s['__v_isInput'] = true;

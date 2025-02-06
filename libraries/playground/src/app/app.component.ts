@@ -1,3 +1,4 @@
+import { faker } from '@faker-js/faker';
 import { Component, computed, inject, OnInit, signal, viewChild } from '@prang/core';
 import { onBeforeUnmount } from '@prang/core/runtime';
 import ButtonComponent from './button/button.component';
@@ -6,7 +7,6 @@ import DisplayComponent from './display/display.component';
 import { FormattedNumber } from './formatted-number/formatted-number.component';
 import { ShoppingListComponent } from './shopping-list/shopping-list.component';
 import { ShoppingListService } from './shopping-list/shopping.service';
-import { faker } from '@faker-js/faker';
 
 @Component({
     selector: 'app-component',

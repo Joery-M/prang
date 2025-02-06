@@ -5,10 +5,11 @@
 >
     <p>{{ value() }}</p>
     <!-- Basically same as {{ currency(computed()) }} -->
-    <p>{{ computed() | this.currency }}</p>
+    <p>{{ computed() | currency }}</p>
 </div>
 <button @click="value.update(v => v + 1)">Increment</button>
 <button (click)="increment()">Increment</button>
+<button (click)="this.increment()">Increment</button>
 <br />
 <input type="range" min="0" max="100" *model.number="value" />
 

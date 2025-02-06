@@ -1,22 +1,29 @@
+import { CodeGenerator } from '@babel/generator';
+import { identifier, isExportNamedDeclaration, isFunctionDeclaration, isThisExpression } from '@babel/types';
 import {
+    createInterpolation,
     ElementTypes,
     generate,
     getBaseTransformPreset,
     isCoreComponent,
     NodeTypes,
     transform,
+    transformExpression as vTransformExpression,
     type ComponentNode,
     type RootNode,
     type TemplateChildNode,
     type TransformContext
 } from '@vue/compiler-core';
+import { babelParse, walkAST } from 'ast-kit';
+import MagicString from 'magic-string';
 import { basename } from 'pathe';
 import { type SourceMapInput } from 'rollup';
 import { kebabCase } from 'scule';
 import { type Plugin } from 'vite';
 import { ComponentMap, type ComponentMeta } from '../../internal';
-import { parseTemplateRequest } from '../../utils';
+import { dedent, parseTemplateRequest, stry } from '../../utils';
 import { baseParse } from './parser/parse';
+import { transformExpression } from './transformExpression';
 import { transformPipe } from './transformPipe';
 import { transformModel } from './vModel';
 
@@ -72,6 +79,8 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
     const prefixIdentifiers = true;
 
     const [nodeTransforms, directiveTransforms] = getBaseTransformPreset(prefixIdentifiers);
+    const i = nodeTransforms.indexOf(vTransformExpression);
+    nodeTransforms[i] = transformExpression;
 
     const parsed = baseParse(code, {
         parseMode: 'base',
@@ -84,10 +93,11 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
         hoistStatic: true,
         cacheHandlers: false,
         slotted: true,
+        bindingMetadata: meta?.bindings,
         prefixIdentifiers,
         directiveTransforms: Object.assign({}, directiveTransforms, { model: transformModel }),
         scopeId,
-        nodeTransforms: [transformPipe, ...nodeTransforms, importedComponentTransform(meta)]
+        nodeTransforms: [transformPipe, ...nodeTransforms, importedComponentTransform(meta), thisCallTransform]
     });
     const result = generate(parsed, {
         filename,
@@ -95,18 +105,52 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
         sourceMap: true,
         mode: 'module',
         prefixIdentifiers,
+        bindingMetadata: meta?.bindings,
         inline: false,
         inSSR: ssr,
         runtimeModuleName: '@prang/core/runtime',
         scopeId
     });
-    // writeFileSync(
-    //     fileURLToPath(import.meta.resolve('./file_' + Date.now() + '.json')),
-    //     JSON.stringify(parsed, undefined, 4)
-    // );
 
+    const s = new MagicString(result.code);
+    const ast = babelParse(result.code);
+    walkAST(ast, {
+        enter(node, parent, key, index) {
+            if (isExportNamedDeclaration(node) && isFunctionDeclaration(node.declaration)) {
+                // Append getting correct _ctx
+                s.appendRight(
+                    node.declaration.body.start! + 1,
+                    dedent`\n
+                    _ctx.$ && (_ctx = _ctx.$.setupState)
+                    `
+                );
+            }
+        }
+    });
+
+    if (meta?.bindings) {
+        s.append(
+            '\n\n/**\n * Analyzed bindings:\n' +
+                JSON.stringify(meta?.bindings, undefined, 2).replace(/^(.+)/gm, ' * $1') +
+                '\n */\n'
+        );
+    }
+
+    s.append(
+        dedent`
+            \nimport.meta.hot.on('file-changed', ({ file }) => {
+                __VUE_HMR_RUNTIME__.CHANGED_FILE = file
+            });
+            import.meta.hot.accept(mod => {
+                if (!mod) return;
+                const { render: updated } = mod;
+                console.log('template update')
+                __VUE_HMR_RUNTIME__.rerender(${stry(scopeId)}, updated);
+            })
+        `
+    );
     return {
-        code: result.code,
+        code: s.toString(),
         map: result.map! as SourceMapInput
     };
 }
@@ -143,4 +187,22 @@ function importedComponentTransform(meta?: ComponentMeta) {
             }
         }
     };
+}
+
+function thisCallTransform(node: RootNode | TemplateChildNode, ctx: TransformContext) {
+    if (node.type !== NodeTypes.INTERPOLATION || !node.content.ast) return;
+    let changed = false;
+    const newAST = walkAST(node.content.ast, {
+        enter(n, parent, key, index) {
+            if (isThisExpression(n)) {
+                changed = true;
+                this.replace(identifier('_ctx'));
+            }
+        }
+    });
+    if (changed) {
+        const generated = new CodeGenerator(newAST!).generate();
+        console.log(generated);
+        ctx.replaceNode(createInterpolation(generated.code, node.content.loc));
+    }
 }

@@ -5,6 +5,7 @@ import {
     createCompoundExpression,
     createObjectProperty,
     createSimpleExpression,
+    DOMErrorCodes,
     ElementTypes,
     ErrorCodes,
     findDir,
@@ -17,17 +18,14 @@ import {
     isStaticArgOf,
     isStaticExp,
     NodeTypes,
-    type DirectiveTransform,
-    type ExpressionNode,
-    type Property
-} from '@vue/compiler-dom';
-import {
-    DOMErrorCodes,
     V_MODEL_CHECKBOX,
     V_MODEL_DYNAMIC,
     V_MODEL_RADIO,
     V_MODEL_SELECT,
-    V_MODEL_TEXT
+    V_MODEL_TEXT,
+    type DirectiveTransform,
+    type ExpressionNode,
+    type Property
 } from '@vue/compiler-dom';
 
 const __DEV__ = true;
@@ -62,7 +60,8 @@ const baseTransformModel: DirectiveTransform = (dir, node, context) => {
     const maybeRef =
         bindingType === BindingTypes.SETUP_LET ||
         bindingType === BindingTypes.SETUP_REF ||
-        bindingType === BindingTypes.SETUP_MAYBE_REF;
+        bindingType === BindingTypes.SETUP_MAYBE_REF ||
+        bindingType === BindingTypes.SETUP_SIGNAL;
 
     if (!expString.trim() || (!isMemberExpression(exp, context) && !maybeRef)) {
         context.onError(createCompilerError(ErrorCodes.X_V_MODEL_MALFORMED_EXPRESSION, exp.loc));
@@ -93,6 +92,9 @@ const baseTransformModel: DirectiveTransform = (dir, node, context) => {
                 createSimpleExpression(rawExp, false, exp.loc),
                 `).value = $event)`
             ]);
+        } else if (bindingType === BindingTypes.SETUP_SIGNAL) {
+            assignmentExp = createCompoundExpression([`${eventArg} => (`, exp, `.set($event))`]);
+            getExp = createCompoundExpression([exp, '()'], exp.loc);
         } else {
             // v-model used on a potentially ref binding in <script setup> inline mode.
             // the assignment needs to check whether the binding is actually a ref.
@@ -104,8 +106,7 @@ const baseTransformModel: DirectiveTransform = (dir, node, context) => {
             ]);
         }
     } else {
-        assignmentExp = createCompoundExpression([`${eventArg} => (`, exp, `.set($event))`]);
-        getExp = createCompoundExpression([exp, '()'], exp.loc);
+        assignmentExp = createCompoundExpression([`${eventArg} => ((`, exp, `) = $event)`]);
     }
 
     const props = [

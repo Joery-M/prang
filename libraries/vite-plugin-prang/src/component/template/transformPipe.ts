@@ -15,6 +15,7 @@ import {
     isIdentifier,
     isMemberExpression,
     isPrivateName,
+    isThisExpression,
     type BinaryExpression,
     type Expression
 } from '@babel/types';
@@ -110,18 +111,34 @@ function transformBinaryExp(exp: BinaryExpression, context: TransformContext) {
     // If call expression, add the previous exp as the first argument
     const result = stack.reduceRight((prev, cur) => {
         if (isIdentifier(cur)) {
-            const newName = toValidAssetId(cur.name, 'filter');
-            context.filters?.add(cur.name);
-            return callExpression(identifier(newName), [prev]);
+            // Check if pipe was defined in class
+            if (!context.bindingMetadata[cur.name]) {
+                const newName = toValidAssetId(cur.name, 'filter');
+                context.filters?.add(cur.name);
+                return callExpression(identifier(newName), [prev]);
+            }
+            return callExpression(cur, [prev]);
         } else if (isMemberExpression(cur)) {
+            if (isThisExpression(cur.object)) {
+                if (isCallExpression(cur.property)) {
+                    return callExpression(cur.property, [prev]);
+                } else if (isIdentifier(cur.property)) {
+                    return callExpression(cur.property, [prev]);
+                }
+            }
+            console.log(cur);
             return callExpression(cur, [prev]);
         } else if (isCallExpression(cur)) {
             // If its a direct identifier, assume its an imported pipe
             // Else if its a member expression (e.g. this.capitalize), use that directly
             if (isIdentifier(cur.callee)) {
-                const newName = toValidAssetId(cur.callee.name, 'filter');
-                context.filters?.add(cur.callee.name);
-                return callExpression(identifier(newName), [prev, ...cur.arguments]);
+                // Check if pipe was defined in class
+                if (!context.bindingMetadata[cur.callee.name]) {
+                    const newName = toValidAssetId(cur.callee.name, 'filter');
+                    context.filters?.add(cur.callee.name);
+                    return callExpression(identifier(newName), [prev, ...cur.arguments]);
+                }
+                return callExpression(cur.callee, [prev, ...cur.arguments]);
             } else {
                 return callExpression(cur.callee, [prev, ...cur.arguments]);
             }
