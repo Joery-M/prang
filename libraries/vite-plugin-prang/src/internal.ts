@@ -3,12 +3,8 @@ import type { ImportBinding } from 'ast-kit';
 
 export interface ComponentMeta {
     sourceId: string;
-    span: {
-        start: number;
-        end: number;
-    };
+    className: string;
     selectors?: string[];
-    className?: string;
     template?: { loc: SourceLocation; source: string };
     inlineTemplate?: boolean;
     /**

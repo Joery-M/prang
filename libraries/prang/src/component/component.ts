@@ -1,13 +1,12 @@
 import {
     CLASS_COMPONENT,
-    isInput,
     PIPE,
     resolveSelector,
     type AnyClassImport,
     type ClassComponent,
     type ClassPipe
 } from '../internal';
-import { createCommentVNode, onBeforeUnmount, onMounted, provide, watch, type Prop } from '../runtime';
+import { createCommentVNode, type Prop } from '../runtime';
 
 export function Component(m?: ComponentMeta): Function {
     const meta = Object.assign(
@@ -34,46 +33,10 @@ export function Component(m?: ComponentMeta): Function {
 
     return (component: ClassComponent) => {
         const componentName = [meta.selector].flat()[0];
-        component.__vType = CLASS_COMPONENT;
         component.__vSelector = meta.selector;
-        // Name will change with minification, but its find
-        (component as any).__vInjectionId = Symbol(component.name);
-
-        component.__vccOpts = {
-            __name: componentName,
-            __file: meta.fileUrl,
-            __scopeId: meta.scopeId ? 'data-v-' + meta.scopeId : undefined,
-            components: Object.fromEntries(components),
-            filters: Object.fromEntries(filters),
-            props: meta.inputs,
-            setup(props, { expose }) {
-                const instance = new component();
-                if ('onInit' in instance && typeof instance['onInit'] === 'function')
-                    onMounted(() => instance.onInit());
-                if ('onDestroy' in instance && typeof instance['onDestroy'] === 'function')
-                    onBeforeUnmount(() => instance.onDestroy());
-
-                // For non-compiled props
-                watch(
-                    props,
-                    (propValues) => {
-                        for (const [key, value] of Object.entries(propValues)) {
-                            if (key in instance && isInput(instance[key])) {
-                                const instProp = instance[key];
-                                if (value !== instProp()) {
-                                    (instProp as any).set(value);
-                                }
-                            }
-                        }
-                    },
-                    { immediate: true }
-                );
-
-                expose({ [CLASS_COMPONENT]: instance });
-                provide(component.__vInjectionId, instance);
-                return (_ctx: any, cache: any) => meta.render.call(instance, instance, cache);
-            }
-        };
+        component.__vccOpts.__name = componentName;
+        component.__vccOpts.components = Object.fromEntries(components);
+        component.__vccOpts.filters = Object.fromEntries(filters);
     };
 }
 

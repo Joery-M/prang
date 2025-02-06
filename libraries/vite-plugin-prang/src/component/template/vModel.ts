@@ -1,7 +1,6 @@
 import {
     BindingTypes,
     ConstantTypes,
-    createCallExpression,
     createCompilerError,
     createCompoundExpression,
     createObjectProperty,
@@ -21,7 +20,7 @@ import {
     type DirectiveTransform,
     type ExpressionNode,
     type Property
-} from '@vue/compiler-core';
+} from '@vue/compiler-dom';
 import {
     DOMErrorCodes,
     V_MODEL_CHECKBOX,
@@ -30,8 +29,6 @@ import {
     V_MODEL_SELECT,
     V_MODEL_TEXT
 } from '@vue/compiler-dom';
-import { walk } from '@vue/compiler-sfc';
-import { extractIdentifiers, walkAST } from 'ast-kit';
 
 const __DEV__ = true;
 
@@ -162,6 +159,7 @@ export const transformModel: DirectiveTransform = (dir, node, context) => {
     }
 
     if (dir.arg) {
+        console.log(dir);
         context.onError(createCompilerError(DOMErrorCodes.X_V_MODEL_ARG_ON_ELEMENT, dir.arg.loc));
     }
 

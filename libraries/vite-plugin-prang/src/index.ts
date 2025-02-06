@@ -1,4 +1,4 @@
-import type { Plugin } from 'vite';
+import { normalizePath, type Plugin } from 'vite';
 import { ComponentScanPlugin } from './component/component-scan-plugin';
 import { ComponentStyleTransform } from './component/style/style-transform-plugin';
 import { TemplateTransformPlugin } from './component/template/template-transform-plugin';
@@ -20,6 +20,13 @@ export function prang(): Plugin[] {
                         __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false
                     }
                 };
+            },
+            handleHotUpdate(ctx) {
+                ctx.server.ws.send({
+                    type: 'custom',
+                    event: 'file-changed',
+                    data: { file: normalizePath(ctx.file) }
+                });
             }
         },
         ComponentStyleTransform(),

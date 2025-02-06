@@ -13,6 +13,6 @@ import { Component, input } from '@prang/core';
         `
     ]
 })
-export default class {
+export default class DisplayComponent {
     value = input<string>('nothing');
 }

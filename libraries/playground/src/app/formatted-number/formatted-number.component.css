@@ -1,0 +1,8 @@
+input {
+    padding: 3px 7px;
+    max-width: 50px;
+    margin: 0 0.5em;
+
+    -moz-appearance: textfield;
+    appearance: textfield;
+}

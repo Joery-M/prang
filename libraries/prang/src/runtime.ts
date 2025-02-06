@@ -19,6 +19,7 @@ import { isSignal, PIPE, SIGNAL_SOURCE, type DefineModelOptions } from './intern
 import { signal, type ModelSignal, type Output, type ReadonlySignal } from './signal';
 
 export * from '@vue/runtime-dom';
+export { CLASS_COMPONENT } from './internal';
 
 export function withDirectives<T extends VNode>(vnode: T, directives: DirectiveArguments) {
     for (const dir of directives) {
