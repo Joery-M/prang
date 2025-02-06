@@ -20,7 +20,6 @@ import { BindingTypes, type BindingMetadata } from '@vue/compiler-core';
 import { camelize } from '@vue/shared';
 import {
     babelParse,
-    isCallOf,
     isIdentifierOf,
     isLiteralType,
     parseCache,
@@ -90,6 +89,7 @@ export function ComponentScanPlugin(): Plugin {
 
             const s = new MagicString(code, { filename: id });
             const imports: Record<string, ImportBinding> = {};
+            const useHMR = this.environment.mode == 'dev' && this.environment.config.server.hmr !== false;
             let classDeclarationIndex = -1;
 
             const importedHelpers = new Map<string, string>();
@@ -139,19 +139,6 @@ export function ComponentScanPlugin(): Plugin {
                                 s.appendRight(arg.start!, '}');
                             }
 
-                            // Convert class methods into function expressions
-                            // node.body.body.forEach((prop) => {
-                            //     if (!isClassMethod(prop) || (isIdentifier(prop.key) && prop.key.name === 'constructor'))
-                            //         return;
-
-                            //     prop.params.forEach((param, i) => {
-                            //         if (isTSParameterProperty(param)) {
-                            //             s.update(param.start!, param.end!, '__' + i);
-                            //         }
-                            //     });
-                            //     s.appendRight(prop.key.end!, ' = function');
-                            // });
-
                             const filePath = stry(path.relative(ctx.environment.config.root, id));
 
                             s.appendRight(
@@ -160,16 +147,15 @@ export function ComponentScanPlugin(): Plugin {
                                 static {
                                     this.__vType = ${helper('CLASS_COMPONENT')};
                                     this.__vInjectionId = Symbol(this.name);
-                                    this.__hmrId = ${stry(scopeId)};
                                     this.__vccOpts = {
                                         __file: ${filePath},
                                         __scopeId: ${stry('data-v-' + scopeId)},
-                                        __hmrId: ${stry(scopeId)},
+                                        ${useHMR ? '__hmrId: ' + stry(scopeId) + ',' : ''}
                                         props: ${propsResult.inputs || '{}'},
                                         emits: ${propsResult.outputs || '[]'},
-                                        __test: true,
                                         setup: (_p, { expose }) => {
                                             const instance = ${helper('wrapClassComponent')}(new this());
+                                            instance.__isScriptSetup = true;
                                             if ('onInit' in instance && typeof instance['onInit'] === 'function')
                                                 ${helper('onMounted')}(() => instance.onInit());
                                             if ('onDestroy' in instance && typeof instance['onDestroy'] === 'function')
@@ -180,14 +166,15 @@ export function ComponentScanPlugin(): Plugin {
                                         },
                                         render: __render_${scopeId}
                                     };
-                                }\n
+                                }
                                 `
                             );
 
-                            // Append HMR
-                            s.appendRight(
-                                node.end!,
-                                dedent`
+                            if (useHMR) {
+                                // Append HMR
+                                s.appendRight(
+                                    node.end!,
+                                    dedent`
                                 \ntypeof __VUE_HMR_RUNTIME__ !== 'undefined' &&
                                     __VUE_HMR_RUNTIME__.createRecord(${stry(scopeId)}, ${meta.className})
 
@@ -200,7 +187,8 @@ export function ComponentScanPlugin(): Plugin {
                                     __VUE_HMR_RUNTIME__.reload(updated.__hmrId, updated);
                                 })
                                 `
-                            );
+                                );
+                            }
                         }
                     }
                 }
@@ -423,7 +411,7 @@ async function getModuleInfoFromCode(code: string, id: string, ctx: PluginContex
                             decArg.start = decorator.expression.end! - 1;
                         }
                         const meta = await getComponentMeta(decArg, node, id, scopeHash, imports, ctx);
-                        meta.bindings = resolveBindings(node, imports);
+                        meta.bindings = resolveBindings(node);
 
                         if (meta) {
                             curComponentMap[scopeHash] = meta;
@@ -548,17 +536,7 @@ function resolveProps(
     return results;
 }
 
-function resolveBindings(classNode: ClassDeclaration, imports: Record<string, ImportBinding>) {
-    const getImportBinding = (name: string) => {
-        return Object.values(imports).find((imp) => imp.source == '@prang/core' && imp.imported == name)?.local;
-    };
-    const input = getImportBinding('input');
-    const output = getImportBinding('output');
-    const model = getImportBinding('model');
-    const signal = getImportBinding('signal');
-    const viewChild = getImportBinding('viewChild');
-    const computed = getImportBinding('computed');
-
+function resolveBindings(classNode: ClassDeclaration) {
     const bindings: BindingMetadata = {};
     walkAST(classNode, {
         enter(node, parent) {
@@ -578,28 +556,8 @@ function resolveBindings(classNode: ClassDeclaration, imports: Record<string, Im
                 node.accessibility !== 'private' &&
                 (isIdentifier(node.key) || isLiteral(node.key))
             ) {
-                if (input && isCallOf(node.value, input)) {
-                    const name = resolveString(node.key);
-                    bindings[name] = BindingTypes.SETUP_REACTIVE_CONST;
-                } else if (output && isCallOf(node.value, output)) {
-                    const name = resolveString(node.key);
-                    bindings[name] = BindingTypes.SETUP_REACTIVE_CONST;
-                } else if (model && isCallOf(node.value, model)) {
-                    const name = resolveString(node.key);
-                    bindings[name] = BindingTypes.SETUP_SIGNAL;
-                } else if (signal && isCallOf(node.value, signal)) {
-                    const name = resolveString(node.key);
-                    bindings[name] = BindingTypes.SETUP_SIGNAL;
-                } else if (computed && isCallOf(node.value, computed)) {
-                    const name = resolveString(node.key);
-                    bindings[name] = BindingTypes.SETUP_REACTIVE_CONST;
-                } else if (viewChild && isCallOf(node.value, viewChild)) {
-                    const name = resolveString(node.key);
-                    bindings[name] = BindingTypes.SETUP_MAYBE_REF;
-                } else {
-                    const name = resolveString(node.key);
-                    bindings[name] = BindingTypes.SETUP_CONST;
-                }
+                const name = resolveString(node.key);
+                bindings[name] = BindingTypes.SETUP_CONST;
             }
         }
     });

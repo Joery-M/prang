@@ -2,6 +2,9 @@ import type { SourceLocation } from '@babel/types';
 import { BindingTypes } from '@vue/compiler-core';
 import type { ImportBinding } from 'ast-kit';
 
+//@ts-ignore
+BindingTypes.SETUP_SIGNAL = 'setup-signal'
+
 export type BindingMetadata = {
     [key: string]: BindingTypes | undefined;
 } & {

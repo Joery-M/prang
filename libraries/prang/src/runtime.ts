@@ -32,24 +32,14 @@ export function wrapClassComponent(component: InstanceType<ClassComponent>) {
     const i = getCurrentInstance()!;
     return new Proxy(component, {
         get(target, p, receiver) {
-            if (p === '__isScriptSetup' || p === CLASS_COMPONENT) {
-                return true;
-            }
-            // console.log(p);
+            if (p === '__isScriptSetup' || p === CLASS_COMPONENT) return true;
+
             return Reflect.get(target, p, receiver);
         },
-        apply(target, thisArg, argArray) {
-            console.log(target);
-            return Reflect.apply(target, thisArg, argArray);
-        },
         set(target, p: string, newValue, receiver) {
-            if ('__v_viewChild' in target[p]) {
+            if (typeof target[p] === 'object' && '__v_viewChild' in target[p]) {
                 i.refs ||= {};
                 i.refs[p] = newValue;
-                return true;
-            }
-            if (isSignal(target[p])) {
-                target[p].set(newValue);
                 return true;
             }
             return Reflect.set(target, p, newValue, receiver);
@@ -223,7 +213,6 @@ export function compiledModel<T, G = T, S = T>(
         };
     };
     s[SIGNAL_SOURCE] = r;
-    s[ReactiveFlags.IS_REF] = true;
     s[ReactiveFlags.IS_SHALLOW] = true;
     return s as ModelSignal<G, S>;
 }

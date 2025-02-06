@@ -1,31 +1,15 @@
-import { CodeGenerator } from '@babel/generator';
-import { identifier, isExportNamedDeclaration, isFunctionDeclaration, isThisExpression } from '@babel/types';
-import {
-    createInterpolation,
-    ElementTypes,
-    generate,
-    getBaseTransformPreset,
-    isCoreComponent,
-    NodeTypes,
-    transform,
-    transformExpression as vTransformExpression,
-    type ComponentNode,
-    type RootNode,
-    type TemplateChildNode,
-    type TransformContext
-} from '@vue/compiler-core';
-import { babelParse, walkAST } from 'ast-kit';
+import { generate, getBaseTransformPreset, transform } from '@vue/compiler-core';
 import MagicString from 'magic-string';
 import { basename } from 'pathe';
 import { type SourceMapInput } from 'rollup';
-import { kebabCase } from 'scule';
 import { type Plugin } from 'vite';
-import { ComponentMap, type ComponentMeta } from '../../internal';
+import { ComponentMap } from '../../internal';
 import { dedent, parseTemplateRequest, stry } from '../../utils';
 import { baseParse } from './parser/parse';
-import { transformExpression } from './transformExpression';
-import { transformPipe } from './transformPipe';
-import { transformModel } from './vModel';
+import { importedComponentTransform } from './transforms/importedComponent';
+import { thisCallTransform } from './transforms/thisCall';
+import { transformPipe } from './transforms/transformPipe';
+import { transformModel } from './transforms/vModel';
 
 export function TemplateTransformPlugin(): Plugin {
     return {
@@ -79,12 +63,10 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
     const prefixIdentifiers = true;
 
     const [nodeTransforms, directiveTransforms] = getBaseTransformPreset(prefixIdentifiers);
-    const i = nodeTransforms.indexOf(vTransformExpression);
-    nodeTransforms[i] = transformExpression;
 
     const parsed = baseParse(code, {
         parseMode: 'base',
-        prefixIdentifiers: true
+        prefixIdentifiers
     });
 
     transform(parsed, {
@@ -113,20 +95,6 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
     });
 
     const s = new MagicString(result.code);
-    const ast = babelParse(result.code);
-    walkAST(ast, {
-        enter(node, parent, key, index) {
-            if (isExportNamedDeclaration(node) && isFunctionDeclaration(node.declaration)) {
-                // Append getting correct _ctx
-                s.appendRight(
-                    node.declaration.body.start! + 1,
-                    dedent`\n
-                    _ctx.$ && (_ctx = _ctx.$.setupState)
-                    `
-                );
-            }
-        }
-    });
 
     if (meta?.bindings) {
         s.append(
@@ -153,56 +121,4 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
         code: s.toString(),
         map: result.map! as SourceMapInput
     };
-}
-
-function importedComponentTransform(meta?: ComponentMeta) {
-    // Resolve all imported components by their selectors
-    const components = new Set<string>();
-
-    const allComponents = Array.from(ComponentMap.values());
-    meta?.imports?.forEach((binding) => {
-        allComponents.find((meta) => {
-            if (meta.sourceId === binding.source) {
-                if (meta.className) {
-                    components.add(kebabCase(meta.className));
-                    components.add(meta.className);
-                }
-                if (meta.selectors) {
-                    meta.selectors.forEach((val) => {
-                        components.add(val);
-                    });
-                }
-            }
-        });
-    });
-
-    return (node: RootNode | TemplateChildNode, ctx: TransformContext) => {
-        // If the 'element' is part of our selectors, treat is as a component
-        if (node.type == NodeTypes.ELEMENT && node.tagType === ElementTypes.ELEMENT) {
-            if (!isCoreComponent(node.tag) && components.has(node.tag)) {
-                ctx.replaceNode({
-                    ...(node as unknown as ComponentNode),
-                    tagType: ElementTypes.COMPONENT
-                });
-            }
-        }
-    };
-}
-
-function thisCallTransform(node: RootNode | TemplateChildNode, ctx: TransformContext) {
-    if (node.type !== NodeTypes.INTERPOLATION || !node.content.ast) return;
-    let changed = false;
-    const newAST = walkAST(node.content.ast, {
-        enter(n, parent, key, index) {
-            if (isThisExpression(n)) {
-                changed = true;
-                this.replace(identifier('_ctx'));
-            }
-        }
-    });
-    if (changed) {
-        const generated = new CodeGenerator(newAST!).generate();
-        console.log(generated);
-        ctx.replaceNode(createInterpolation(generated.code, node.content.loc));
-    }
 }
