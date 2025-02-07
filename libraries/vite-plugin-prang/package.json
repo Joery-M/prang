@@ -1,6 +1,7 @@
 {
   "name": "vite-plugin-prang",
   "type": "module",
+  "license": "MIT",
   "exports": {
     ".": {
       "import": "./dist/index.js",

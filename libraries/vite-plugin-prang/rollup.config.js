@@ -8,8 +8,8 @@ import packageJson from './package.json' assert { type: 'json' };
 
 const banner = `/**
  * vite-plugin-prang
- * 
- * @license MIT
+ *
+ * @license MIT 2025-present Joery Münninghoff
  */
 `;
 

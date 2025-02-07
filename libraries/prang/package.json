@@ -2,6 +2,7 @@
   "name": "prang",
   "version": "0.0.1",
   "type": "module",
+  "license": "MIT",
   "exports": {
     ".": {
       "development": "./src/index.ts",

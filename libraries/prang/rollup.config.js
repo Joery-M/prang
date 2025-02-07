@@ -7,8 +7,8 @@ import UnpluginIsolatedDecl from 'unplugin-isolated-decl/rollup';
 
 const banner = `/**
  * prang
- * 
- * @license MIT
+ *
+ * @license MIT 2025-present Joery Münninghoff
  */
 `;
 
