@@ -6,7 +6,7 @@ import esbuild from 'rollup-plugin-esbuild';
 import UnpluginIsolatedDecl from 'unplugin-isolated-decl/rollup';
 
 const banner = `/**
- * @prang/core
+ * prang
  * 
  * @license MIT
  */

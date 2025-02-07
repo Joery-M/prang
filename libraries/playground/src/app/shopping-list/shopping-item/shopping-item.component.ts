@@ -1,4 +1,4 @@
-import { Component, inject } from '@prang/core';
+import { Component, inject } from 'prang';
 import { Shopping2Service } from '../shopping-2.service';
 import { ShoppingListService } from '../shopping.service';
 

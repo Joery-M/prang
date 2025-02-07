@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@prang/core';
+import { Injectable, signal } from 'prang';
 import { ShoppingItem } from './shopping.model';
 
 @Injectable()

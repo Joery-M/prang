@@ -54,7 +54,7 @@ export function ComponentScanPlugin(): Plugin {
             const strippedId = path.resolve(id);
 
             const code = (await readFile(id)).toString();
-            if (!code.includes('@prang/core') || !code.includes('class')) {
+            if (!code.includes('prang') || !code.includes('class')) {
                 return;
             }
             const mappedComponents = await getModuleInfoFromCode(code, strippedId, this);
@@ -67,7 +67,7 @@ export function ComponentScanPlugin(): Plugin {
                 id.includes('\0') ||
                 id.includes('/node_modules/') ||
                 id.includes('?prang') ||
-                !code.includes('@prang/core') ||
+                !code.includes('prang') ||
                 !code.includes('class')
             )
                 return;
@@ -206,7 +206,7 @@ export function ComponentScanPlugin(): Plugin {
                     })
                     .join(', ');
                 s.appendRight(0, importString);
-                s.appendRight(0, ` } from '@prang/core/runtime';\n`);
+                s.appendRight(0, ` } from 'prang/runtime';\n`);
             }
 
             if (s.hasChanged()) {
@@ -387,7 +387,7 @@ async function getModuleInfoFromCode(code: string, id: string, ctx: PluginContex
                 case 'ImportSpecifier': {
                     if (
                         isImportDeclaration(parent) &&
-                        parent.source.value === '@prang/core' &&
+                        parent.source.value === 'prang' &&
                         isIdentifierOf(node.imported, 'Component')
                     ) {
                         componentIdent = node.local.name;
@@ -446,9 +446,9 @@ function resolveProps(
     helper: (helper: string) => string
 ) {
     const importValues = Object.values(imports);
-    const inputIdentifier = importValues.find((imp) => imp.source == '@prang/core' && imp.imported == 'input')?.local;
-    const outputIdentifier = importValues.find((imp) => imp.source == '@prang/core' && imp.imported == 'output')?.local;
-    const modelIdentifier = importValues.find((imp) => imp.source == '@prang/core' && imp.imported == 'model')?.local;
+    const inputIdentifier = importValues.find((imp) => imp.source == 'prang' && imp.imported == 'input')?.local;
+    const outputIdentifier = importValues.find((imp) => imp.source == 'prang' && imp.imported == 'output')?.local;
+    const modelIdentifier = importValues.find((imp) => imp.source == 'prang' && imp.imported == 'model')?.local;
 
     const inputs = new Set<Expression>();
     const outputs = new Set<ClassProperty>();
@@ -542,7 +542,7 @@ function resolveProps(
 
 function resolveBindings(classNode: ClassDeclaration, imports: Record<string, ImportBinding>) {
     const getImportBinding = (name: string) => {
-        return Object.values(imports).find((imp) => imp.source == '@prang/core' && imp.imported == name)?.local;
+        return Object.values(imports).find((imp) => imp.source == 'prang' && imp.imported == name)?.local;
     };
     const input = getImportBinding('input');
     const model = getImportBinding('model');

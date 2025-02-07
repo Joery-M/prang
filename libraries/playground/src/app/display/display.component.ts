@@ -1,4 +1,4 @@
-import { Component, input } from '@prang/core';
+import { Component, input } from 'prang';
 
 @Component({
     selector: 'display-text',

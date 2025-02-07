@@ -1,4 +1,4 @@
-import { Component, model } from '@prang/core';
+import { Component, model } from 'prang';
 import { Capitalize } from '../capitalize.pipe';
 
 @Component({

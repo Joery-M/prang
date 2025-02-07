@@ -1,9 +1,3 @@
-/**
- * @prang/core
- *
- * @license MIT
- */
-
 export { bootstrapComponent } from './app';
 export { Component } from './component/component';
 export * from './component/hooks';

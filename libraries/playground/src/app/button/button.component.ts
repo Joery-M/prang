@@ -1,4 +1,4 @@
-import { Component, input, output, signal } from '@prang/core';
+import { Component, input, output, signal } from 'prang';
 
 @Component({
     selector: 'button-component',

@@ -1,5 +1,5 @@
 {
-  "name": "@prang/core",
+  "name": "prang",
   "version": "0.0.1",
   "type": "module",
   "exports": {

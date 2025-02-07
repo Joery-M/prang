@@ -20,7 +20,7 @@ importers:
       '@faker-js/faker':
         specifier: ^9.4.0
         version: 9.4.0
-      '@prang/core':
+      prang:
         specifier: workspace:^
         version: link:../prang
     devDependencies:

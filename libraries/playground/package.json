@@ -12,6 +12,6 @@
   },
   "dependencies": {
     "@faker-js/faker": "^9.4.0",
-    "@prang/core": "workspace:^"
+    "prang": "workspace:^"
   }
 }

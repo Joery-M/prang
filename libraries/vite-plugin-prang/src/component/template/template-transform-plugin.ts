@@ -98,7 +98,7 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
         bindingMetadata: meta?.bindings,
         inline: false,
         inSSR: ssr,
-        runtimeModuleName: '@prang/core/runtime',
+        runtimeModuleName: 'prang/runtime',
         scopeId
     });
 

@@ -1,4 +1,4 @@
-import { Pipe } from '@prang/core';
+import { Pipe } from 'prang';
 
 @Pipe({
     name: 'capitalize'

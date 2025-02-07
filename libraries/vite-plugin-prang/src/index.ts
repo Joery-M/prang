@@ -12,7 +12,7 @@ export function prang(): Plugin[] {
             config() {
                 return {
                     optimizeDeps: {
-                        include: ['@prang/core/runtime']
+                        include: ['prang/runtime']
                     },
                     define: {
                         __VUE_OPTIONS_API__: false,

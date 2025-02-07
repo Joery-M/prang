@@ -1,5 +1,5 @@
 /**
- * @prang/core/runtime
+ * prang/runtime
  *
  * @license MIT
  */

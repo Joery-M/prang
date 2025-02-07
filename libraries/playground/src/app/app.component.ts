@@ -1,6 +1,6 @@
 import { faker } from '@faker-js/faker';
-import { Component, computed, inject, OnInit, signal, viewChild } from '@prang/core';
-import { onBeforeUnmount } from '@prang/core/runtime';
+import { Component, computed, inject, OnInit, signal, viewChild } from 'prang';
+import { onBeforeUnmount } from 'prang/runtime';
 import ButtonComponent from './button/button.component';
 import { Capitalize } from './capitalize.pipe';
 import DisplayComponent from './display/display.component';

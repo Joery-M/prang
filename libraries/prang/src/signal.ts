@@ -63,14 +63,14 @@ export function input<T>(): ReadonlySignal<T | undefined>;
 export function input<T>(defaultValue: T): ReadonlySignal<T>;
 export function input<T>(defaultValue?: T): ReadonlySignal<T> {
     console.warn(
-        'input(defaultValue) is a compiler macro that should be transformed to compiledInput(propName, defaultValue) from "@prang/core/runtime"'
+        'input(defaultValue) is a compiler macro that should be transformed to compiledInput(propName, defaultValue) from "prang/runtime"'
     );
     return NOOP as ReadonlySignal<T>;
 }
 
 export function output<T extends any | readonly any[] = any>(): Output<T> {
     console.warn(
-        'output() is a compiler macro that should be transformed to compiledOutput(propName) from "@prang/core/runtime"'
+        'output() is a compiler macro that should be transformed to compiledOutput(propName) from "prang/runtime"'
     );
     return NOOP as Output<T>;
 }
@@ -79,7 +79,7 @@ export function model<T>(): Signal<T | undefined>;
 export function model<T, G = T, S = T>(defaultValue: T, options?: DefineModelOptions<T, G, S>): ModelSignal<G, S>;
 export function model<T, G = T, S = T>(defaultValue?: T, options?: DefineModelOptions<T, G, S>): ModelSignal<G, S> {
     console.warn(
-        'model(defaultValue) is a compiler macro that should be transformed to compiledModel(propName, defaultValue) from "@prang/core/runtime"'
+        'model(defaultValue) is a compiler macro that should be transformed to compiledModel(propName, defaultValue) from "prang/runtime"'
     );
     return NOOP as ModelSignal<G, S>;
 }
