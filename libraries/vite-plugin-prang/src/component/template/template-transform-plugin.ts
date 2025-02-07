@@ -26,41 +26,29 @@ export function TemplateTransformPlugin(): Plugin {
                 return id;
             }
         },
-        load(id, options) {
+        load(id) {
             const request = parseTemplateRequest(id);
             if (!request?.query.prang || request.query.type !== 'inline-template' || !request.query.scopeId) return;
             const meta = ComponentMap.get(request.query.scopeId);
 
             const templateString = meta?.template?.source ?? '';
-            const isProd = this.environment.mode === 'build';
-            const result = compileTemplate(
-                templateString,
-                request.filename,
-                request.query.scopeId,
-                options?.ssr ?? false,
-                isProd
-            );
+            const useHMR = this.environment.mode == 'dev' && this.environment.config.server.hmr !== false;
+            const result = compileTemplate(templateString, request.filename, request.query.scopeId, false, useHMR);
 
             return result;
         },
-        transform(code, id, options) {
+        transform(code, id) {
             const request = parseTemplateRequest(id);
             if (!request?.query.prang || request.query.type !== 'template') return;
-            const isProd = this.environment.mode === 'build';
-            const result = compileTemplate(
-                code,
-                request.filename,
-                request.query.scopeId!,
-                options?.ssr ?? false,
-                isProd
-            );
+            const useHMR = this.environment.mode == 'dev' && this.environment.config.server.hmr !== false;
+            const result = compileTemplate(code, request.filename, request.query.scopeId!, false, useHMR);
 
             return result;
         }
     };
 }
 
-function compileTemplate(code: string, path: string, scopeId: string, ssr: boolean, isProd: boolean) {
+export function compileTemplate(code: string, path: string, scopeId: string, inline: boolean, useHMR: boolean) {
     const filename = basename(path);
 
     const meta = ComponentMap.get(scopeId);
@@ -79,10 +67,10 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
 
     transform(parsed, {
         inline: false,
-        inSSR: ssr,
         hoistStatic: true,
         cacheHandlers: false,
         slotted: true,
+        hmr: useHMR,
         bindingMetadata: meta?.bindings,
         prefixIdentifiers,
         directiveTransforms: Object.assign({}, directiveTransforms, { model: transformModel }),
@@ -91,13 +79,11 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
     });
     const result = generate(parsed, {
         filename,
-        ssr,
         sourceMap: true,
         mode: 'module',
         prefixIdentifiers,
         bindingMetadata: meta?.bindings,
-        inline: false,
-        inSSR: ssr,
+        inline,
         runtimeModuleName: 'prang/runtime',
         scopeId
     });
@@ -112,8 +98,9 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
         );
     }
 
-    s.append(
-        dedent`
+    if (useHMR) {
+        s.append(
+            dedent`
             \nimport.meta.hot.on('file-changed', ({ file }) => {
                 __VUE_HMR_RUNTIME__.CHANGED_FILE = file
             });
@@ -123,9 +110,11 @@ function compileTemplate(code: string, path: string, scopeId: string, ssr: boole
                 __VUE_HMR_RUNTIME__.rerender(${stry(scopeId)}, updated);
             })
         `
-    );
+        );
+    }
     return {
-        code: s.toString(),
+        code: s.toString() as string,
+        preamble: result.preamble as string,
         map: result.map! as SourceMapInput
     };
 }

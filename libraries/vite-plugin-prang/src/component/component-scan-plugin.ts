@@ -40,6 +40,8 @@ import type { PluginContext } from 'rollup';
 import { type Plugin } from 'vite';
 import { ComponentMap, type ComponentMeta } from '../internal';
 import { dedent, getHash, stry } from '../utils';
+import { compileTemplate } from './template/template-transform-plugin';
+import { existsSync, readFileSync } from 'fs';
 
 export function ComponentScanPlugin(): Plugin {
     parseCache.clear();
@@ -143,54 +145,7 @@ export function ComponentScanPlugin(): Plugin {
 
                             const filePath = stry(path.relative(ctx.environment.config.root, id));
 
-                            s.appendRight(
-                                node.end! - 1,
-                                dedent`
-                                static {
-                                    this.__vType = ${helper('CLASS_COMPONENT')};
-                                    this.__vInjectionId = Symbol(this.name);
-                                    this.__vccOpts = {
-                                        __file: ${filePath},
-                                        __scopeId: ${stry('data-v-' + scopeId)},
-                                        ${useHMR ? '__hmrId: ' + stry(scopeId) + ',' : ''}
-                                        props: ${propsResult.inputs || '{}'},
-                                        emits: ${propsResult.outputs || '[]'},
-                                        setup: (_p, { expose }) => {
-                                            const instance = ${helper('wrapClassComponent')}(new this());
-                                            instance.__isScriptSetup = true;
-                                            if ('onInit' in instance && typeof instance['onInit'] === 'function')
-                                                ${helper('onMounted')}(() => instance.onInit());
-                                            if ('onDestroy' in instance && typeof instance['onDestroy'] === 'function')
-                                                ${helper('onBeforeUnmount')}(() => instance.onDestroy());
-                            
-                                            expose(instance);
-                                            return instance;
-                                        },
-                                        render: __render_${scopeId}
-                                    };
-                                }
-                                `
-                            );
-
-                            if (useHMR) {
-                                // Append HMR
-                                s.appendRight(
-                                    node.end!,
-                                    dedent`
-                                \ntypeof __VUE_HMR_RUNTIME__ !== 'undefined' &&
-                                    __VUE_HMR_RUNTIME__.createRecord(${stry(scopeId)}, ${meta.className})
-
-                                import.meta.hot.on('file-changed', ({ file }) => {
-                                    __VUE_HMR_RUNTIME__.CHANGED_FILE = file
-                                });
-                                import.meta.hot.accept(mod => {
-                                    if (!mod) return;
-                                    const { ${meta.className}: updated } = mod;
-                                    __VUE_HMR_RUNTIME__.reload(${stry(scopeId)}, updated);
-                                })
-                                `
-                                );
-                            }
+                            generateStaticFields(node, s, meta, scopeId, propsResult, useHMR, filePath, helper);
                         }
                     }
                 }
@@ -217,6 +172,101 @@ export function ComponentScanPlugin(): Plugin {
             }
         }
     };
+}
+
+function generateStaticFields(
+    node: ClassDeclaration,
+    s: MagicString,
+    meta: ComponentMeta,
+    scopeId: string,
+    propsResult: ReturnType<typeof resolveProps>,
+    useHMR: boolean,
+    filePath: string,
+    helper: (key: string) => string
+) {
+    if (process.env.NODE_ENV === 'production') {
+        let templateCode = meta.template?.source ?? '';
+        let templateFilePath = (meta.inlineTemplate ? filePath : meta.template?.source) ?? filePath;
+        if (!meta.inlineTemplate && meta.template && existsSync(meta.template.source)) {
+            templateCode = readFileSync(meta.template.source).toString();
+        }
+        const template = compileTemplate(templateCode, templateFilePath, scopeId, true, false);
+        s.prependLeft(node.start!, template.preamble);
+        s.appendRight(
+            node.end! - 1,
+            dedent`
+            static {
+                this.__vType = ${helper('CLASS_COMPONENT')};
+                this.__vInjectionId = Symbol(this.name);
+                this.__vccOpts = {
+                    __scopeId: ${stry('data-v-' + scopeId)},
+                    props: ${propsResult.inputs || '{}'},
+                    emits: ${propsResult.outputs || '[]'},
+                    setup: (_p, { expose }) => {
+                        const $setup = ${helper('wrapClassComponent')}(new this());
+                        $setup.__isScriptSetup = true;
+                        if ('onInit' in $setup && typeof $setup['onInit'] === 'function')
+                            ${helper('onMounted')}(() => $setup.onInit());
+                        if ('onDestroy' in $setup && typeof $setup['onDestroy'] === 'function')
+                            ${helper('onBeforeUnmount')}(() => $setup.onDestroy());
+        
+                        expose($setup);
+                        return ${template.code};
+                    }
+                };
+            }
+        `
+        );
+    } else {
+        s.appendRight(
+            node.end! - 1,
+            dedent`
+            static {
+                this.__vType = ${helper('CLASS_COMPONENT')};
+                this.__vInjectionId = Symbol(this.name);
+                this.__vccOpts = {
+                    __file: ${filePath},
+                    __scopeId: ${stry('data-v-' + scopeId)},
+                    ${useHMR ? '__hmrId: ' + stry(scopeId) + ',' : ''}
+                    props: ${propsResult.inputs || '{}'},
+                    emits: ${propsResult.outputs || '[]'},
+                    setup: (_p, { expose }) => {
+                        const instance = ${helper('wrapClassComponent')}(new this());
+                        instance.__isScriptSetup = true;
+                        if ('onInit' in instance && typeof instance['onInit'] === 'function')
+                            ${helper('onMounted')}(() => instance.onInit());
+                        if ('onDestroy' in instance && typeof instance['onDestroy'] === 'function')
+                            ${helper('onBeforeUnmount')}(() => instance.onDestroy());
+        
+                        expose(instance);
+                        return instance;
+                    },
+                    render: __render_${scopeId}
+                };
+            }
+        `
+        );
+
+        if (useHMR) {
+            // Append HMR
+            s.appendRight(
+                node.end!,
+                dedent`
+                    \ntypeof __VUE_HMR_RUNTIME__ !== 'undefined' &&
+                        __VUE_HMR_RUNTIME__.createRecord(${stry(scopeId)}, ${meta.className})
+
+                    import.meta.hot.on('file-changed', ({ file }) => {
+                        __VUE_HMR_RUNTIME__.CHANGED_FILE = file
+                    });
+                    import.meta.hot.accept(mod => {
+                        if (!mod) return;
+                        const { ${meta.className}: updated } = mod;
+                        __VUE_HMR_RUNTIME__.reload(${stry(scopeId)}, updated);
+                    })
+                `
+            );
+        }
+    }
 }
 
 async function getComponentMeta(
@@ -258,10 +308,12 @@ async function getComponentMeta(
                 const tmplUrl = resolveString(prop.value);
                 let resolvedId = (await ctx.resolve(tmplUrl, id))?.id;
                 if (!resolvedId) break;
-                let importExp = resolvedId + `?prang&type=template&scopeId=${scopeHash}`;
-                importExp = `import { render as __render_${scopeHash} } from ${stry(importExp)};\n`;
 
-                meta.preamble += importExp;
+                if (process.env.NODE_ENV !== 'production') {
+                    let importExp = resolvedId + `?prang&type=template&scopeId=${scopeHash}`;
+                    importExp = `import { render as __render_${scopeHash} } from ${stry(importExp)};\n`;
+                    meta.preamble += importExp;
+                }
                 meta.template = { loc: prop.loc!, source: resolvedId };
                 meta.deleteLocs.push(prop.loc!);
                 break;
@@ -271,10 +323,12 @@ async function getComponentMeta(
                 const templateString = resolveString(prop.value);
 
                 if (!templateString) break;
-                let tmplUrl = `${id}?prang&type=inline-template&scopeId=${scopeHash}`;
-                tmplUrl = `import { render as __render_${scopeHash} } from ${stry(tmplUrl)};\n`;
 
-                meta.preamble += tmplUrl;
+                if (process.env.NODE_ENV !== 'production') {
+                    let tmplUrl = `${id}?prang&type=inline-template&scopeId=${scopeHash}`;
+                    tmplUrl = `import { render as __render_${scopeHash} } from ${stry(tmplUrl)};\n`;
+                    meta.preamble += tmplUrl;
+                }
                 meta.template = { loc: prop.loc!, source: templateString };
                 meta.inlineTemplate = true;
                 meta.deleteLocs.push(prop.loc!);
