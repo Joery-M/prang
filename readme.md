@@ -25,7 +25,7 @@ Look in `libraries/playground` for the current testing setup.
 
 ## Plans
 
-- [ ] HMR for styles and templates
+- [x] HMR for styles and templates
 - [x] 2 way binding
 - [ ] `contentChild()`
 - [ ] Template ref binding with `<comp #myComp />` (slot syntax will have to change)
