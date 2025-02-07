@@ -39,7 +39,7 @@ export type DefineModelOptions<T = any, G = T, S = T> = {
 type Arrayable<T> = T | T[];
 export type AnyClassImport = Arrayable<ClassComponent | ClassPipe>;
 
-export function resolveSelector(value: ClassComponent | ClassPipe) {
+export function resolveSelector(value: ClassComponent | ClassPipe): Map<string, ClassComponent | ClassPipe> {
     const map = new Map<string, ClassComponent | ClassPipe>();
 
     if (Array.isArray(value.__vSelector)) {

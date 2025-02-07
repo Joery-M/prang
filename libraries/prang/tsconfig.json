@@ -1,0 +1,10 @@
+{
+    "extends": "../../tsconfig.json",
+    "include": ["./src/index.ts", "./src/rxjs.ts", "./src/runtime.ts"],
+    "compilerOptions": {
+        "declarationDir": "temp",
+        "declaration": true,
+        "emitDeclarationOnly": true,
+        "isolatedDeclarations": true
+    }
+}

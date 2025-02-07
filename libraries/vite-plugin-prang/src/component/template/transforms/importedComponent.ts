@@ -31,7 +31,7 @@ export function importedComponentTransform(meta?: ComponentMeta) {
         });
     });
 
-    return (node: RootNode | TemplateChildNode, ctx: TransformContext) => {
+    return (node: RootNode | TemplateChildNode, ctx: TransformContext): void => {
         // If the 'element' is part of our selectors, treat is as a component
         if (node.type == NodeTypes.ELEMENT && node.tagType === ElementTypes.ELEMENT) {
             if (!isCoreComponent(node.tag) && components.has(node.tag)) {

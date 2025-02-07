@@ -28,15 +28,20 @@
         "build": "premove dist && rollup -c"
     },
     "devDependencies": {
+        "@rollup/plugin-commonjs": "^28.0.2",
         "@rollup/plugin-node-resolve": "^16.0.0",
+        "@rollup/plugin-typescript": "^12.1.2",
         "@vueuse/core": "^12.5.0",
-        "@vueuse/rxjs": "^12.5.0",
         "@vueuse/shared": "^12.5.0",
         "esbuild": "^0.24.2",
         "premove": "^4.0.0",
         "rollup": "^4.34.4",
-        "rollup-plugin-commonjs": "^10.1.0",
-        "rollup-plugin-esbuild": "^6.2.0"
+        "rollup-plugin-dts": "^6.1.1",
+        "rollup-plugin-esbuild": "^6.2.0",
+        "typescript": "^5.7.3"
+    },
+    "dependencies": {
+        "@vueuse/rxjs": "^12.5.0"
     },
     "peerDependencies": {
         "@vue/reactivity": "^3.5.0",

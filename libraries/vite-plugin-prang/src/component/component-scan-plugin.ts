@@ -219,7 +219,7 @@ export function ComponentScanPlugin(): Plugin {
     };
 }
 
-export async function getComponentMeta(
+async function getComponentMeta(
     decoratorArg: ObjectExpression,
     classNode: ClassDeclaration,
     id: string,

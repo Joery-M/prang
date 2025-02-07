@@ -31,4 +31,4 @@ export interface ComponentMeta {
     bindings: BindingMetadata;
 }
 
-export const ComponentMap = new Map<string, ComponentMeta>();
+export const ComponentMap: Map<string, ComponentMeta> = new Map<string, ComponentMeta>();

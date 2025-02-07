@@ -43,17 +43,13 @@ export function stry(strings: TemplateStringsArray | string, ...values: unknown[
 }
 
 // From: https://github.com/victornpb/tiny-dedent
-export function dedent(strings: TemplateStringsArray | string, ...values: unknown[]) {
+export function dedent(strings: TemplateStringsArray | string, ...values: unknown[]): string {
     let str = template(strings, ...values);
     str = str.replace(/^[ \t]*\r?\n/, ''); // remove leading blank line
     var indent = /^[ \t]+/m.exec(str); // detected indent
     if (indent) str = str.replace(new RegExp('^' + indent[0], 'gm'), ''); // remove indent
     str = str.replace(/(\r?\n)[ \t]+$/, '$1');
     return str; // remove trailling blank line
-}
-export function indent(strings: TemplateStringsArray | string, ...values: unknown[]) {
-    const str = template(strings, values);
-    return str.replace(/^/, '  ');
 }
 
 function template(str: TemplateStringsArray | string, ...keys: any[]) {

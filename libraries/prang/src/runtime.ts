@@ -15,20 +15,17 @@ import {
     type VNode
 } from '@vue/runtime-dom';
 import { EMPTY_OBJ, hasChanged, hyphenate } from '@vue/shared';
-import {
-    CLASS_COMPONENT,
-    isSignal,
-    PIPE,
-    SIGNAL_SOURCE,
-    type ClassComponent,
-    type DefineModelOptions
-} from './internal';
+import { CLASS_COMPONENT, isSignal, PIPE, SIGNAL_SOURCE, type DefineModelOptions } from './internal';
 import { signal, type ModelSignal, type Output, type ReadonlySignal } from './signal';
 
 export * from '@vue/runtime-dom';
 export { CLASS_COMPONENT } from './internal';
 
-export function wrapClassComponent(component: InstanceType<ClassComponent>) {
+type AnyObject = {
+    [key: symbol | string]: any;
+};
+
+export function wrapClassComponent<T extends AnyObject>(component: T): T {
     const i = getCurrentInstance()!;
     return new Proxy(component, {
         get(target, p, receiver) {
@@ -47,7 +44,7 @@ export function wrapClassComponent(component: InstanceType<ClassComponent>) {
     });
 }
 
-export function withDirectives<T extends VNode>(vnode: T, directives: DirectiveArguments) {
+export function withDirectives<T extends VNode>(vnode: T, directives: DirectiveArguments): T {
     for (const dir of directives) {
         const val = dir[1];
         if (isSignal(val)) {
@@ -57,7 +54,7 @@ export function withDirectives<T extends VNode>(vnode: T, directives: DirectiveA
     return vWithDirectives(vnode, directives);
 }
 
-export function resolveFilter(name: string) {
+export function resolveFilter(name: string): any {
     const instance = getCurrentInstance();
     const type = 'filters';
     if (instance) {
