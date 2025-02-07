@@ -1,17 +1,18 @@
-<p>{{ 'A'.repeat(value() + 1) }}</p>
+ <p>{{ 'A'.repeat(value() + 1) }}</p>
 <div
     [style]="{ width: '200px', height: '200px', display: 'flex', 'justify-content': 'center', 'align-items': 'center' }"
     style="flex-direction: column"
 >
-    <p>{{ value() }}</p>
+    <p>{{ value() }}</p> 
     <!-- Basically same as {{ currency(computed()) }} -->
-    <p>{{ computed() | currency }}</p>
+     <p>{{ computed() | currency }}</p>
 </div>
 <button @click="value.update(v => v + 1)">Increment</button>
 <button (click)="increment()">Increment</button>
 <button (click)="this.increment()">Increment</button>
 <br />
 <input type="range" min="0" max="100" *model.number="value" />
+<input type="range" min="0" max="100" [(model.number)]="value" />
 
 <p *if="value() < 41">Less than 41</p>
 <p *else-if="value() == 41">Equals 41</p>
@@ -44,9 +45,8 @@
 
 <hr />
 <h2>2 way binding</h2>
-
-<formatted-number v-model:value="numberValue" />
-<formatted-number [(value)]="numberValue" />
+<formatted-number v-model:value.number="numberValue" />
+<formatted-number [(value.number)]="numberValue" />
 <p>
     <button (click)="numberValue.update(v => (v ?? 0) - 1)">-</button>
     <span style="min-width: 50px; display: inline-block; text-align: center">{{ numberValue() }}</span>

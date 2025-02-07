@@ -302,8 +302,8 @@ export default class Tokenizer {
         };
     }
 
-    private peek() {
-        return this.buffer.charCodeAt(this.index + 1);
+    private peek(offset = 1) {
+        return this.buffer.charCodeAt(this.index + offset);
     }
 
     private stateText(c: number): void {
@@ -699,14 +699,6 @@ export default class Tokenizer {
             this.cbs.ondirname(this.sectionStart, this.index);
             this.state = State.InDirArg;
             this.sectionStart = this.index + 1;
-        } else if (
-            this.buffer.charCodeAt(this.sectionStart) === CharCodes.LeftSquare &&
-            this.buffer.charCodeAt(this.sectionStart + 1) === CharCodes.LeftParen &&
-            c === CharCodes.RightParen &&
-            this.peek() === CharCodes.RightSquare
-        ) {
-            this.cbs.ondirname(this.sectionStart, this.index + 2);
-            this.state = State.InDirArg;
         } else if (c === CharCodes.Dot) {
             this.cbs.ondirname(this.sectionStart, this.index);
             this.state = State.InDirModifier;
@@ -714,15 +706,7 @@ export default class Tokenizer {
         }
     }
     private stateInDirArg(c: number): void {
-        if (this.buffer.charCodeAt(this.index - 1) === CharCodes.RightParen && c === CharCodes.RightSquare) {
-            // 2 way [(binding)]
-            this.cbs.ondirarg(this.sectionStart + 2, this.index - 1);
-            this.handleAttrNameEnd(c);
-            this.sectionStart = this.index + 1;
-        } else if ((c === CharCodes.RightSquare || c === CharCodes.RightParen) && this.peek() === CharCodes.Eq) {
-            this.cbs.ondirarg(this.sectionStart, this.index);
-            this.handleAttrNameEnd(c);
-        } else if (c === CharCodes.Eq || isEndOfTagSection(c)) {
+        if (c === CharCodes.Eq || isEndOfTagSection(c)) {
             this.cbs.ondirarg(this.sectionStart, this.index);
             this.handleAttrNameEnd(c);
         } else if (c === CharCodes.LeftSquare) {
@@ -760,10 +744,7 @@ export default class Tokenizer {
         this.stateAfterAttrName(c);
     }
     private stateAfterAttrName(c: number): void {
-        if (c === CharCodes.RightSquare || c === CharCodes.RightParen) {
-            this.state = State.BeforeAttrValue;
-            this.index += 1;
-        } else if (c === CharCodes.Eq) {
+        if (c === CharCodes.Eq) {
             this.state = State.BeforeAttrValue;
         } else if (c === CharCodes.Slash || c === CharCodes.Gt) {
             this.cbs.onattribend(QuoteType.NoValue, this.sectionStart);

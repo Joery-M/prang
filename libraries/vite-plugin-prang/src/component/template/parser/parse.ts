@@ -232,7 +232,7 @@ const tokenizer = new Tokenizer(stack, {
                 if (raw.startsWith('*')) {
                     name = raw.slice(1);
                 } else if (raw.startsWith('[(') && raw.endsWith(')]')) {
-                    name = 'model';
+                    name = raw.slice(2, -2);
                 } else {
                     name = raw.slice(2);
                 }
@@ -283,9 +283,16 @@ const tokenizer = new Tokenizer(stack, {
             (currentProp as AttributeNode).name += arg;
             setLocEnd((currentProp as AttributeNode).nameLoc, end);
         } else {
+            let newArg = arg;
+            if (arg[0] === '[') {
+                newArg = arg.slice(1, -1);
+            } else if (arg.at(-1) === ']' || arg.at(-1) === ')') {
+                newArg = arg.slice(0, -1);
+            }
             const isStatic = arg[0] !== `[`;
+
             (currentProp as DirectiveNode).arg = createExp(
-                isStatic ? arg : arg.slice(1, -1),
+                newArg,
                 isStatic,
                 getLoc(start, end),
                 isStatic ? ConstantTypes.CAN_STRINGIFY : ConstantTypes.NOT_CONSTANT
@@ -294,7 +301,11 @@ const tokenizer = new Tokenizer(stack, {
     },
 
     ondirmodifier(start, end) {
-        const mod = getSlice(start, end);
+        let mod = getSlice(start, end);
+        if (mod.endsWith(')]')) {
+            mod = mod.slice(0, -2);
+        }
+
         if (inVPre) {
             (currentProp as AttributeNode).name += '.' + mod;
             setLocEnd((currentProp as AttributeNode).nameLoc, end);
@@ -326,9 +337,37 @@ const tokenizer = new Tokenizer(stack, {
 
     onattribnameend(end) {
         const start = currentProp!.loc.start.offset;
-        const name = getSlice(start, end);
-        if (currentProp!.type === NodeTypes.DIRECTIVE) {
-            currentProp!.rawName = name;
+        let name = getSlice(start, end);
+
+        if (currentProp?.type === NodeTypes.DIRECTIVE) {
+            // [(value)] > v-model:value
+            // [(value.number)] > v-model:value.number
+            // [(model)] > v-model
+            // [(model.number)] > v-model.number
+            if (name.startsWith('[(') && name.endsWith(')]')) {
+                const [argName] = name.slice(2, -2).split('.');
+                if (argName === 'model') {
+                    currentProp.rawName = 'v-model';
+                } else {
+                    currentProp.name = 'model';
+                    currentProp.rawName = 'v-model';
+                    currentProp.arg = createExp(
+                        argName,
+                        true,
+                        getLoc(start + 2, start + 2 + argName.length),
+                        ConstantTypes.CAN_STRINGIFY
+                    );
+                }
+            } else if (name.startsWith('*')) {
+                // *if -> v-if
+                currentProp.rawName = 'v-' + name.slice(1);
+            } else if (name.startsWith('[') && name.endsWith(']')) {
+                // [title] -> :title
+                currentProp.rawName = ':' + name.slice(1, -1);
+            } else if (name.startsWith('(') && name.endsWith(')')) {
+                // (title) -> @title
+                currentProp.rawName = '@' + name.slice(1, -1);
+            }
         }
         // check duplicate attrs
         if (currentOpenTag!.props.some((p) => (p.type === NodeTypes.DIRECTIVE ? p.rawName : p.name) === name)) {
