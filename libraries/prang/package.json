@@ -1,57 +1,56 @@
 {
-    "name": "@prang/core",
-    "version": "0.0.1",
-    "type": "module",
-    "exports": {
-        ".": {
-            "development": "./src/index.ts",
-            "import": "./dist/index.js",
-            "types": "./dist/index.d.ts"
-        },
-        "./runtime": {
-            "development": "./src/runtime.ts",
-            "import": "./dist/runtime.js",
-            "types": "./dist/runtime.d.ts"
-        },
-        "./rxjs": {
-            "development": "./src/rxjs.ts",
-            "import": "./dist/rxjs.js",
-            "types": "./dist/rxjs.d.ts"
-        }
+  "name": "@prang/core",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     },
-    "types": "./dist/index.d.ts",
-    "module": "./dist/index.js",
-    "files": [
-        "dist"
-    ],
-    "scripts": {
-        "build": "premove dist && rollup -c"
+    "./runtime": {
+      "development": "./src/runtime.ts",
+      "import": "./dist/runtime.js",
+      "types": "./dist/runtime.d.ts"
     },
-    "devDependencies": {
-        "@rollup/plugin-commonjs": "^28.0.2",
-        "@rollup/plugin-node-resolve": "^16.0.0",
-        "@rollup/plugin-typescript": "^12.1.2",
-        "@vueuse/core": "^12.5.0",
-        "@vueuse/shared": "^12.5.0",
-        "esbuild": "^0.24.2",
-        "premove": "^4.0.0",
-        "rollup": "^4.34.4",
-        "rollup-plugin-dts": "^6.1.1",
-        "rollup-plugin-esbuild": "^6.2.0",
-        "typescript": "^5.7.3"
-    },
-    "dependencies": {
-        "@vueuse/rxjs": "^12.5.0"
-    },
-    "peerDependencies": {
-        "@vue/reactivity": "^3.5.0",
-        "@vue/runtime-dom": "^3.5.0",
-        "@vue/shared": "^3.5.0",
-        "rxjs": "^7.0.0"
-    },
-    "peerDependenciesMeta": {
-        "rxjs": {
-            "optional": true
-        }
+    "./rxjs": {
+      "development": "./src/rxjs.ts",
+      "import": "./dist/rxjs.js",
+      "types": "./dist/rxjs.d.ts"
     }
+  },
+  "types": "./dist/index.d.ts",
+  "module": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rollup -c"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.2",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@vueuse/core": "^12.5.0",
+    "@vueuse/shared": "^12.5.0",
+    "esbuild": "^0.24.2",
+    "premove": "^4.0.0",
+    "rollup": "^4.34.4",
+    "rollup-plugin-esbuild": "^6.2.0",
+    "typescript": "^5.7.3",
+    "unplugin-isolated-decl": "^0.11.0"
+  },
+  "dependencies": {
+    "@vueuse/rxjs": "^12.5.0"
+  },
+  "peerDependencies": {
+    "@vue/reactivity": "^3.5.0",
+    "@vue/runtime-dom": "^3.5.0",
+    "@vue/shared": "^3.5.0",
+    "rxjs": "^7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "rxjs": {
+      "optional": true
+    }
+  }
 }

@@ -31,6 +31,7 @@
 
 <input type="text" *model="text" />
 <input type="text" v-model="text" />
+<input type="text" [(model)]="text" />
 
 <p>{{ text() | capitalize }}</p>
 <p>{{ text() | capitalize(true) }}</p>
@@ -48,7 +49,7 @@
 <formatted-number [(value)]="numberValue" />
 <p>
     <button (click)="numberValue.update(v => (v ?? 0) - 1)">-</button>
-    <span style="min-width: 50px; display: inline-block; text-align: center;">{{ numberValue() }}</span>
+    <span style="min-width: 50px; display: inline-block; text-align: center">{{ numberValue() }}</span>
     <button (click)="numberValue.update(v => (v ?? 0) + 1)">+</button>
 </p>
 
@@ -56,7 +57,7 @@
 <h2>Shopping list example</h2>
 
 <button (click)="addShoppingItem()">Add item</button>
-<shopping-list/>
-<shopping-list/>
+<shopping-list />
+<shopping-list />
 
 <br *for="i in 10" />
