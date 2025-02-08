@@ -14,9 +14,15 @@
 <input type="range" min="0" max="100" *model.number="value" />
 <input type="range" min="0" max="100" [(model.number)]="value" />
 
-<p *if="value() < 41">Less than 41</p>
-<p *else-if="value() == 41">Equals 41</p>
-<p *else>More than 41</p>
+<p>
+    @if (value() < 41) {
+        Less than 41
+    } @elseIf (value() == 41) {
+        Equals 41
+    } @else {
+        More than 41
+    }
+</p>
 
 <br />
 <br />

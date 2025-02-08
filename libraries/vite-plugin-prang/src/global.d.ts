@@ -50,4 +50,8 @@ declare module '@vue/compiler-core' {
          */
         SETUP_SIGNAL = 'setup-signal'
     }
+
+    export interface PlainElementNode extends PlainElementNode {
+        isControlFlow?: boolean;
+    }
 }

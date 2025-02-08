@@ -29,6 +29,7 @@ import {
 } from '@vue/compiler-core';
 import { NO, extend } from '@vue/shared';
 import { decodeHTML } from 'entities/decode';
+import { kebabCase } from 'scule';
 import Tokenizer, { CharCodes, ParseMode, QuoteType, Sequences, State, isWhitespace, toCharCodes } from './tokenizer';
 
 type CompilerCompatConfig = Partial<Record<CompilerDeprecationTypes, boolean | 'suppress-warning'>> & {
@@ -375,10 +376,10 @@ const tokenizer = new Tokenizer(stack, {
         }
     },
 
-    onattribend(quote, end) {
+    onattribend(quote, end, isFlow = false) {
         if (currentOpenTag && currentProp) {
             // finalize end pos
-            setLocEnd(currentProp.loc, end);
+            isFlow || setLocEnd(currentProp.loc, end);
 
             if (quote !== QuoteType.NoValue) {
                 if (__BROWSER__ && currentAttrValue.includes('&')) {
@@ -464,6 +465,86 @@ const tokenizer = new Tokenizer(stack, {
         currentAttrStartIndex = currentAttrEndIndex = -1;
     },
 
+    onflowname(start, end) {
+        /* elseIf > else-if */
+        const name = kebabCase(getSlice(start, end));
+        if (!allowedControlFlows.has(name)) {
+            currentOptions.onError(
+                createCompilerError(
+                    53,
+                    getLoc(start, end),
+                    undefined,
+                    `Legal control flow name was expected, got ${getSlice(start, end)}.`
+                )
+            );
+            return;
+        }
+
+        currentOpenTag = {
+            type: NodeTypes.ELEMENT,
+            tag: 'template',
+            ns: currentOptions.getNamespace(name, stack[0], currentOptions.ns),
+            tagType: ElementTypes.ELEMENT, // does not need to be refined
+            props: [],
+            children: [],
+            loc: getLoc(start, end),
+            codegenNode: undefined,
+            isControlFlow: true
+        };
+    },
+    onflowarg(start, end) {
+        const argValue = getSlice(start, end);
+        if (isAllWhitespace(argValue)) return;
+
+        if (currentOpenTag) {
+            const tagStart = currentOpenTag.loc.start.offset + 1;
+            const tagEnd = currentOpenTag.loc.end.offset;
+            const rawName = kebabCase(getSlice(tagStart, tagEnd));
+            const loc = getLoc(start, end);
+            loc.source = `v-${rawName}="${loc.source}"`;
+            currentProp = {
+                type: NodeTypes.DIRECTIVE,
+                name: rawName,
+                rawName: 'v-' + rawName,
+                exp: undefined,
+                arg: undefined,
+                modifiers: [],
+                loc
+            };
+            currentAttrStartIndex = start;
+            currentAttrEndIndex = end;
+            currentAttrValue = getSlice(start, end);
+            this.onattribend(QuoteType.Unquoted, end, true);
+        }
+    },
+    onflowopen(start) {
+        if (!currentOpenTag) return;
+        if (currentOpenTag.props.length === 0) {
+            // No flow arg (e.g. @else)
+            const tagStart = currentOpenTag.loc.start.offset + 1;
+            const tagEnd = currentOpenTag.loc.end.offset;
+            const rawName = kebabCase(getSlice(tagStart, tagEnd));
+            const loc = getLoc(tagStart, tagEnd);
+            loc.source = 'v-' + loc.source;
+            currentProp = {
+                type: NodeTypes.DIRECTIVE,
+                name: rawName,
+                rawName: 'v-' + rawName,
+                exp: undefined,
+                arg: undefined,
+                modifiers: [],
+                loc
+            };
+            currentOpenTag.props.push(currentProp);
+        }
+        endOpenTag(start);
+    },
+    onflowclose(end) {
+        const el = stack[0];
+        stack.shift();
+        onCloseTag(el, end, false, true);
+    },
+
     oncomment(start, end) {
         if (currentOptions.comments) {
             addNode({
@@ -511,7 +592,6 @@ const tokenizer = new Tokenizer(stack, {
                     emitError(ErrorCodes.EOF_IN_TAG, end);
                     break;
                 default:
-                    // console.log(tokenizer.state)
                     break;
             }
         }
@@ -654,11 +734,15 @@ function onText(content: string, start: number, end: number) {
     }
 }
 
-function onCloseTag(el: ElementNode, end: number, isImplied = false) {
+function onCloseTag(el: ElementNode, end: number, isImplied = false, isFlow = false) {
     // attach end position
     if (isImplied) {
         // implied close, end should be backtracked to close
         setLocEnd(el.loc, backTrack(end, CharCodes.Lt));
+    } else if (isFlow) {
+        setLocEnd(el.loc, end + 1);
+        const innerHTML = el.children.reduce((str, child) => str + child.loc.source, '');
+        el.loc.source = `<template ${el.props[0].loc.source}>${innerHTML}</template>`;
     } else {
         setLocEnd(el.loc, lookAhead(end, CharCodes.Gt) + 1);
     }
@@ -789,6 +873,8 @@ function isFragmentTemplate({ tag, props }: ElementNode): boolean {
     }
     return false;
 }
+
+const allowedControlFlows = new Set(['@if', '@else', '@else-if', '@for', '@slot']);
 
 function isComponent({ tag, props }: ElementNode): boolean {
     if (currentOptions.isCustomElement(tag)) {

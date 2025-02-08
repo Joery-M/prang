@@ -237,10 +237,6 @@ async function getComponentMeta(
     imports: Record<string, ImportBinding>,
     ctx: PluginContext
 ) {
-    if (ComponentMap.has(scopeHash)) {
-        return ComponentMap.get(scopeHash)!;
-    }
-
     const className = classNode.id ? resolveIdentifier(classNode.id)[0] : undefined;
     if (!className) {
         ctx.error({

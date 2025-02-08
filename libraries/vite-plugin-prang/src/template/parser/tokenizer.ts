@@ -25,7 +25,7 @@ IN THE SOFTWARE.
 const __DEV__ = true;
 const __BROWSER__ = false;
 
-import { ErrorCodes } from '@vue/compiler-core';
+import { ElementTypes, ErrorCodes } from '@vue/compiler-core';
 import type { ElementNode, Position } from '@vue/compiler-core';
 
 /**
@@ -78,7 +78,9 @@ export enum CharCodes {
     RightSquare = 93, // "]"
     Star = 42, // "*"
     LeftParen = 40, // "("
-    RightParen = 41 // ")"
+    RightParen = 41, // ")"
+    LeftBrace = 123, // "{"
+    RightBrace = 125 // "}"
 }
 
 const defaultDelimitersOpen = new Uint8Array([123, 123]); // "{{"
@@ -113,6 +115,11 @@ export enum State {
     InAttrValueDq, // "
     InAttrValueSq, // '
     InAttrValueNq,
+
+    // Angular Control flow
+    InFlowName,
+    InFlowArg,
+    BeforeFlowOpen,
 
     // Declarations
     BeforeDeclaration, // !
@@ -188,9 +195,14 @@ export interface Callbacks {
 
     onattribdata(start: number, endIndex: number): void;
     onattribentity(char: string, start: number, end: number): void;
-    onattribend(quote: QuoteType, endIndex: number): void;
+    onattribend(quote: QuoteType, endIndex: number, isFlow?: boolean): void;
     onattribname(start: number, endIndex: number): void;
     onattribnameend(endIndex: number): void;
+
+    onflowname(start: number, endIndex: number): void;
+    onflowarg(start: number, endIndex: number): void;
+    onflowopen(start: number): void;
+    onflowclose(end: number): void;
 
     ondirname(start: number, endIndex: number): void;
     ondirarg(start: number, endIndex: number): void;
@@ -276,6 +288,7 @@ export default class Tokenizer {
         this.newlines.length = 0;
         this.delimiterOpen = defaultDelimitersOpen;
         this.delimiterClose = defaultDelimitersClose;
+        this.flowParenCount = 0;
     }
 
     /**
@@ -313,6 +326,22 @@ export default class Tokenizer {
             }
             this.state = State.BeforeTagName;
             this.sectionStart = this.index;
+        } else if (c === CharCodes.At && !isWhitespace(this.peek())) {
+            if (this.index > this.sectionStart) {
+                this.cbs.ontext(this.sectionStart, this.index);
+            }
+            this.state = State.InFlowName;
+            this.sectionStart = this.index;
+        } else if (
+            c === CharCodes.RightBrace &&
+            this.stack[0]?.tagType === ElementTypes.ELEMENT &&
+            this.stack[0]?.isControlFlow
+        ) {
+            if (this.index > this.sectionStart) {
+                this.cbs.ontext(this.sectionStart, this.index);
+            }
+            this.cbs.onflowclose(this.index);
+            this.sectionStart = this.index + 1;
         } else if (!__BROWSER__ && c === CharCodes.Amp) {
             this.startEntity();
         } else if (!this.inVPre && c === this.delimiterOpen[0]) {
@@ -865,6 +894,45 @@ export default class Tokenizer {
         }
     }
 
+    private stateInFlowName(c: number) {
+        if (isWhitespace(c)) {
+            this.cbs.onflowname(this.sectionStart, this.index);
+            this.sectionStart = this.index + 1;
+            this.state = State.BeforeFlowOpen;
+        }
+    }
+
+    /**
+     * Count parenthesis in control flow argument
+     */
+    private flowParenCount = 0;
+
+    private stateInFlowArg(c: number) {
+        if (c === CharCodes.LeftParen) {
+            this.flowParenCount++;
+        } else if (c === CharCodes.RightParen) {
+            if (this.flowParenCount == 0) {
+                this.cbs.onflowarg(this.sectionStart, this.index);
+                this.sectionStart = this.index + 1;
+                this.state = State.BeforeFlowOpen;
+            } else {
+                this.flowParenCount--;
+            }
+        }
+    }
+
+    private stateBeforeFlowOpen(c: number) {
+        if (c === CharCodes.LeftParen) {
+            this.sectionStart = this.index + 1;
+            this.flowParenCount = 0;
+            this.state = State.InFlowArg;
+        } else if (c === CharCodes.LeftBrace) {
+            this.cbs.onflowopen(this.index);
+            this.sectionStart = this.index + 1;
+            this.state = State.Text;
+        }
+    }
+
     private startEntity() {
         if (!__BROWSER__) {
             this.baseState = this.state;
@@ -1043,6 +1111,18 @@ export default class Tokenizer {
                 }
                 case State.InEntity: {
                     this.stateInEntity();
+                    break;
+                }
+                case State.InFlowName: {
+                    this.stateInFlowName(c);
+                    break;
+                }
+                case State.InFlowArg: {
+                    this.stateInFlowArg(c);
+                    break;
+                }
+                case State.BeforeFlowOpen: {
+                    this.stateBeforeFlowOpen(c);
                     break;
                 }
             }
