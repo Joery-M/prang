@@ -8,7 +8,7 @@ import {
     NodeTypes
 } from '@vue/compiler-core';
 import { kebabCase } from 'scule';
-import { type ComponentMeta, ComponentMap } from '../../../internal';
+import { type ComponentMeta, ComponentMap } from '../../internal';
 
 export function importedComponentTransform(meta?: ComponentMeta) {
     // Resolve all imported components by their selectors

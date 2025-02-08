@@ -7,9 +7,7 @@ import {
 import MagicString from 'magic-string';
 import { basename } from 'pathe';
 import { type SourceMapInput } from 'rollup';
-import { type Plugin } from 'vite';
-import { ComponentMap } from '../../internal';
-import { dedent, parseTemplateRequest, stry } from '../../utils';
+import { dedent, stry, type ComponentQuery } from '../utils';
 import { baseParse } from './parser/parse';
 import { importedComponentTransform } from './transforms/importedComponent';
 import { thisCallTransform } from './transforms/thisCall';
@@ -17,41 +15,9 @@ import { transformExpression } from './transforms/transformExpression';
 import { transformPipe } from './transforms/transformPipe';
 import { transformModel } from './transforms/vModel';
 
-export function TemplateTransformPlugin(): Plugin {
-    return {
-        name: 'prang:template-transform',
-        resolveId(id) {
-            const req = parseTemplateRequest(id);
-            if (req?.query.prang && (req.query.type === 'inline-template' || req.query.type === 'template')) {
-                return id;
-            }
-        },
-        load(id) {
-            const request = parseTemplateRequest(id);
-            if (!request?.query.prang || request.query.type !== 'inline-template' || !request.query.scopeId) return;
-            const meta = ComponentMap.get(request.query.scopeId);
-
-            const templateString = meta?.template?.source ?? '';
-            const useHMR = this.environment.mode == 'dev' && this.environment.config.server.hmr !== false;
-            const result = compileTemplate(templateString, request.filename, request.query.scopeId, false, useHMR);
-
-            return result;
-        },
-        transform(code, id) {
-            const request = parseTemplateRequest(id);
-            if (!request?.query.prang || request.query.type !== 'template') return;
-            const useHMR = this.environment.mode == 'dev' && this.environment.config.server.hmr !== false;
-            const result = compileTemplate(code, request.filename, request.query.scopeId!, false, useHMR);
-
-            return result;
-        }
-    };
-}
-
-export function compileTemplate(code: string, path: string, scopeId: string, inline: boolean, useHMR: boolean) {
-    const filename = basename(path);
-
-    const meta = ComponentMap.get(scopeId);
+export function compileTemplate(code: string, { request, meta }: ComponentQuery, inline: boolean, useHMR: boolean) {
+    const filename = basename(request.filename);
+    const scopeId = request.query.scopeId!;
 
     // Always required
     const prefixIdentifiers = true;
@@ -61,7 +27,6 @@ export function compileTemplate(code: string, path: string, scopeId: string, inl
     nodeTransforms[expIndex] = transformExpression;
 
     const parsed = baseParse(code, {
-        parseMode: 'base',
         prefixIdentifiers
     });
 

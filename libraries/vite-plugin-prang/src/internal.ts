@@ -3,7 +3,7 @@ import { BindingTypes } from '@vue/compiler-core';
 import type { ImportBinding } from 'ast-kit';
 
 //@ts-ignore
-BindingTypes.SETUP_SIGNAL = 'setup-signal'
+BindingTypes.SETUP_SIGNAL = 'setup-signal';
 
 export type BindingMetadata = {
     [key: string]: BindingTypes | undefined;
@@ -30,5 +30,7 @@ export interface ComponentMeta {
     preamble: string;
     bindings: BindingMetadata;
 }
+
+export type ComponentMetaMap = Map<string, ComponentMeta>;
 
 export const ComponentMap: Map<string, ComponentMeta> = new Map<string, ComponentMeta>();

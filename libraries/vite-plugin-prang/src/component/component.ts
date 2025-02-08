@@ -4,7 +4,6 @@ import {
     isClassMethod,
     isClassProperty,
     isIdentifier,
-    isImportDeclaration,
     isLiteral,
     isObjectExpression,
     isObjectProperty,
@@ -12,8 +11,6 @@ import {
     objectExpression,
     toKeyAlias,
     type ClassDeclaration,
-    type ClassProperty,
-    type Expression,
     type ObjectExpression
 } from '@babel/types';
 import { BindingTypes, type BindingMetadata } from '@vue/compiler-core';
@@ -23,7 +20,6 @@ import {
     isCallOf,
     isIdentifierOf,
     isLiteralType,
-    parseCache,
     resolveIdentifier,
     resolveLiteral,
     resolveString,
@@ -33,145 +29,105 @@ import {
     walkImportDeclaration,
     type ImportBinding
 } from 'ast-kit';
-import { readFile } from 'fs/promises';
+import { existsSync, readFileSync } from 'fs';
 import MagicString from 'magic-string';
 import path from 'pathe';
-import type { PluginContext } from 'rollup';
-import { type Plugin } from 'vite';
-import { ComponentMap, type ComponentMeta } from '../internal';
-import { dedent, getHash, stry } from '../utils';
-import { compileTemplate } from './template/template-transform-plugin';
-import { existsSync, readFileSync } from 'fs';
+import type { PluginContext, TransformResult } from 'rollup';
+import { ComponentMap, type ComponentMeta, type ComponentMetaMap } from '../internal';
+import { compileTemplate } from '../template/template';
+import { dedent, getHash, isImportOf, stry } from '../utils';
 
-export function ComponentScanPlugin(): Plugin {
-    parseCache.clear();
+export async function componentTransform(code: string, id: string, useHMR: boolean): Promise<TransformResult> {
+    const ast = babelParse(code, path.extname(id), {
+        cache: true,
+        sourceType: 'module',
+        sourceFilename: id,
+        errorRecovery: true,
+        plugins: [
+            'jsx',
+            'typescript',
+            ['decorators', { allowCallParenthesized: true, decoratorsBeforeExport: true }],
+            'decoratorAutoAccessors',
+            'exportDefaultFrom',
+            'functionBind',
+            'importAssertions'
+        ]
+    });
 
-    return {
-        name: 'prang:component-scan',
-        enforce: 'pre',
-        cacheKey: 'prang:component-scan',
-        async load(id) {
-            if (id.includes('\0') || id.includes('/node_modules/') || id.includes('?prang') || !/\.[tj]sx?$/.test(id))
-                return;
-            const strippedId = path.resolve(id);
+    const s = new MagicString(code, { filename: id });
+    const imports: Record<string, ImportBinding> = {};
+    let classDeclarationIndex = -1;
 
-            const code = (await readFile(id)).toString();
-            if (!code.includes('prang') || !code.includes('class')) {
-                return;
-            }
-            const mappedComponents = await getModuleInfoFromCode(code, strippedId, this);
-            for (const [s, m] of Object.entries(mappedComponents)) {
-                ComponentMap.set(s, m);
-            }
-        },
-        async transform(code, id) {
-            if (
-                id.includes('\0') ||
-                id.includes('/node_modules/') ||
-                id.includes('?prang') ||
-                !code.includes('prang') ||
-                !code.includes('class')
-            )
-                return;
-
-            const ast = babelParse(code, path.extname(id), {
-                cache: true,
-                sourceType: 'module',
-                sourceFilename: id,
-                errorRecovery: true,
-                plugins: [
-                    'jsx',
-                    'typescript',
-                    ['decorators', { allowCallParenthesized: true, decoratorsBeforeExport: true }],
-                    'decoratorAutoAccessors',
-                    'exportDefaultFrom',
-                    'functionBind',
-                    'importAssertions'
-                ]
-            });
-
-            const s = new MagicString(code, { filename: id });
-            const imports: Record<string, ImportBinding> = {};
-            const useHMR = this.environment.mode == 'dev' && this.environment.config.server.hmr !== false;
-            let classDeclarationIndex = -1;
-
-            const importedHelpers = new Map<string, string>();
-            const ctx = this;
-            walkAST(ast, {
-                enter(node) {
-                    switch (node.type) {
-                        case 'ImportDeclaration': {
-                            walkImportDeclaration(imports, node);
-                            break;
-                        }
-                        case 'ClassDeclaration': {
-                            classDeclarationIndex++;
-
-                            const scopeId = getHash(id + '#' + classDeclarationIndex);
-                            const meta = ComponentMap.get(scopeId);
-                            const decorator = node.decorators?.[0];
-                            if (!meta || !decorator || !isCallExpression(decorator.expression)) break;
-                            const helper = (helper: string) => {
-                                const localVal = '_' + helper;
-                                importedHelpers.set(helper, localVal);
-                                return localVal;
-                            };
-
-                            let arg: ObjectExpression | undefined = isObjectExpression(
-                                decorator.expression.arguments[0]
-                            )
-                                ? decorator.expression.arguments[0]
-                                : undefined;
-
-                            let insertedObj = false;
-                            if (!arg) {
-                                s.prependLeft(decorator.expression.end! - 1, '{\n');
-                                arg = objectExpression([]);
-                                arg.start = decorator.expression.end! - 1;
-                                insertedObj = true;
-                            }
-                            const propsResult = resolveProps(node, s, imports, helper);
-
-                            for (const deleteLoc of meta.deleteLocs) {
-                                const charAfter = s.original.charAt(deleteLoc.end.index);
-                                s.remove(deleteLoc.start.index, deleteLoc.end.index + (charAfter === ',' ? 1 : 0));
-                            }
-
-                            // Add preample
-                            s.prependLeft(node.start!, meta.preamble);
-                            if (insertedObj) {
-                                s.appendRight(arg.start!, '}');
-                            }
-
-                            const filePath = stry(path.relative(ctx.environment.config.root, id));
-
-                            generateStaticFields(node, s, meta, scopeId, propsResult, useHMR, filePath, helper);
-                        }
-                    }
+    const importedHelpers = new Map<string, string>();
+    walkAST(ast, {
+        enter(node) {
+            switch (node.type) {
+                case 'ImportDeclaration': {
+                    walkImportDeclaration(imports, node);
+                    break;
                 }
-            });
-            if (importedHelpers.size) {
-                s.appendRight(0, `import { `);
-                const importString = Array.from(importedHelpers.entries())
-                    .map(([helper, localVal]) => {
-                        // Any cause it's not going to be used anyway
-                        imports[localVal] = {} as any;
+                case 'ClassDeclaration': {
+                    classDeclarationIndex++;
 
-                        return `${helper} as ${localVal}`;
-                    })
-                    .join(', ');
-                s.appendRight(0, importString);
-                s.appendRight(0, ` } from 'prang/runtime';\n`);
-            }
+                    const scopeId = getHash(id + '#' + classDeclarationIndex);
+                    const meta = ComponentMap.get(scopeId);
+                    const decorator = node.decorators?.[0];
+                    if (!meta || !decorator || !isCallExpression(decorator.expression)) break;
+                    const helper = (helper: string) => {
+                        const localVal = '_' + helper;
+                        importedHelpers.set(helper, localVal);
+                        return localVal;
+                    };
 
-            if (s.hasChanged()) {
-                return {
-                    code: s.toString(),
-                    map: s.generateMap()
-                };
+                    let arg: ObjectExpression | undefined = isObjectExpression(decorator.expression.arguments[0])
+                        ? decorator.expression.arguments[0]
+                        : undefined;
+
+                    let insertedObj = false;
+                    if (!arg) {
+                        s.prependLeft(decorator.expression.end! - 1, '{\n');
+                        arg = objectExpression([]);
+                        arg.start = decorator.expression.end! - 1;
+                        insertedObj = true;
+                    }
+                    const propsResult = resolveProps(node, s, imports, helper);
+
+                    for (const deleteLoc of meta.deleteLocs) {
+                        const charAfter = s.original.charAt(deleteLoc.end.index);
+                        s.remove(deleteLoc.start.index, deleteLoc.end.index + (charAfter === ',' ? 1 : 0));
+                    }
+
+                    // Add preample
+                    s.prependLeft(node.start!, meta.preamble);
+                    if (insertedObj) {
+                        s.appendRight(arg.start!, '}');
+                    }
+
+                    generateStaticFields(node, s, meta, scopeId, id, propsResult, useHMR, helper);
+                }
             }
         }
-    };
+    });
+    if (importedHelpers.size) {
+        s.appendRight(0, `import { `);
+        const importString = Array.from(importedHelpers.entries())
+            .map(([helper, localVal]) => {
+                // Any cause it's not going to be used anyway
+                imports[localVal] = {} as any;
+
+                return `${helper} as ${localVal}`;
+            })
+            .join(', ');
+        s.appendRight(0, importString);
+        s.appendRight(0, ` } from 'prang/runtime';\n`);
+    }
+
+    if (s.hasChanged()) {
+        return {
+            code: s.toString(),
+            map: s.generateMap()
+        };
+    }
 }
 
 function generateStaticFields(
@@ -179,18 +135,23 @@ function generateStaticFields(
     s: MagicString,
     meta: ComponentMeta,
     scopeId: string,
+    filePath: string,
     propsResult: ReturnType<typeof resolveProps>,
     useHMR: boolean,
-    filePath: string,
     helper: (key: string) => string
 ) {
     if (process.env.NODE_ENV === 'production') {
         let templateCode = meta.template?.source ?? '';
-        let templateFilePath = (meta.inlineTemplate ? filePath : meta.template?.source) ?? filePath;
+        let filename = (meta.inlineTemplate ? filePath : meta.template?.source) ?? filePath;
         if (!meta.inlineTemplate && meta.template && existsSync(meta.template.source)) {
             templateCode = readFileSync(meta.template.source).toString();
         }
-        const template = compileTemplate(templateCode, templateFilePath, scopeId, true, false);
+        const template = compileTemplate(
+            templateCode,
+            { request: { filename, query: { scopeId } }, meta },
+            true,
+            false
+        );
         s.prependLeft(node.start!, template.preamble);
         s.appendRight(
             node.end! - 1,
@@ -200,8 +161,8 @@ function generateStaticFields(
                 this.__vInjectionId = Symbol(this.name);
                 this.__vccOpts = {
                     __scopeId: ${stry('data-v-' + scopeId)},
-                    props: ${propsResult.inputs || '{}'},
-                    emits: ${propsResult.outputs || '[]'},
+                    ${propsResult.inputs ? 'props: ' + propsResult.inputs + ',' : ''}
+                    ${propsResult.outputs ? 'emits: ' + propsResult.outputs + ',' : ''}
                     setup: (_p, { expose }) => {
                         const $setup = ${helper('wrapClassComponent')}(new this());
                         $setup.__isScriptSetup = true;
@@ -225,11 +186,11 @@ function generateStaticFields(
                 this.__vType = ${helper('CLASS_COMPONENT')};
                 this.__vInjectionId = Symbol(this.name);
                 this.__vccOpts = {
-                    __file: ${filePath},
+                    __file: ${stry(filePath)},
                     __scopeId: ${stry('data-v-' + scopeId)},
                     ${useHMR ? '__hmrId: ' + stry(scopeId) + ',' : ''}
-                    props: ${propsResult.inputs || '{}'},
-                    emits: ${propsResult.outputs || '[]'},
+                    ${propsResult.inputs ? 'props: ' + propsResult.inputs + ',' : ''}
+                    ${propsResult.outputs ? 'emits: ' + propsResult.outputs + ',' : ''}
                     setup: (_p, { expose }) => {
                         const instance = ${helper('wrapClassComponent')}(new this());
                         instance.__isScriptSetup = true;
@@ -252,8 +213,7 @@ function generateStaticFields(
             s.appendRight(
                 node.end!,
                 dedent`
-                    \ntypeof __VUE_HMR_RUNTIME__ !== 'undefined' &&
-                        __VUE_HMR_RUNTIME__.createRecord(${stry(scopeId)}, ${meta.className})
+                    \n__VUE_HMR_RUNTIME__?.createRecord(${stry(scopeId)}, ${meta.className})
 
                     import.meta.hot.on('file-changed', ({ file }) => {
                         __VUE_HMR_RUNTIME__.CHANGED_FILE = file
@@ -277,6 +237,10 @@ async function getComponentMeta(
     imports: Record<string, ImportBinding>,
     ctx: PluginContext
 ) {
+    if (ComponentMap.has(scopeHash)) {
+        return ComponentMap.get(scopeHash)!;
+    }
+
     const className = classNode.id ? resolveIdentifier(classNode.id)[0] : undefined;
     if (!className) {
         ctx.error({
@@ -342,11 +306,11 @@ async function getComponentMeta(
 
                 meta.imports = await Promise.all(
                     Object.values(imports)
-                        .filter((imp) => identifiers?.includes(imp.local))
+                        .filter((imp) => identifiers.includes(imp.local))
                         .map(async (im) => {
-                            const resolved = await ctx?.resolve(im.source, id);
+                            const resolved = await ctx.resolve(im.source, id);
                             im.source = resolved?.id ?? im.source;
-                            if (resolved) {
+                            if (resolved && !ctx.getModuleInfo(resolved.id)) {
                                 // Load imports
                                 await ctx?.load({ ...resolved, resolveDependencies: true });
                             }
@@ -366,12 +330,11 @@ async function getComponentMeta(
                 meta.styles ||= [];
                 await Promise.all(
                     urls.map(async (url) => {
-                        // ctx would be undefined in HMR, but styles are already hot replaced
-                        const resolved = await ctx?.resolve(url, id);
+                        const resolved = await ctx.resolve(url, id);
                         if (resolved) {
-                            let newUrl = resolved.id + `?prang&type=style&scopeId=${scopeHash}`;
+                            const index = meta.styles!.push({ loc: prop.loc!, code: url });
+                            let newUrl = resolved.id + `?prang&type=style&scopeId=${scopeHash}&styleIndex=${index - 1}`;
                             newUrl = `import ${stry(newUrl)};\n`;
-                            meta.styles!.push({ loc: prop.loc!, code: url });
                             meta.preamble += newUrl;
                         }
                     })
@@ -407,7 +370,10 @@ async function getComponentMeta(
     return meta;
 }
 
-async function getModuleInfoFromCode(code: string, id: string, ctx: PluginContext) {
+/**
+ * Parse code, find components, return metadata for each component.
+ */
+export async function getModuleInfoFromCode(code: string, id: string, ctx: PluginContext): Promise<ComponentMetaMap> {
     const ast = babelParse(code, path.extname(id), {
         sourceType: 'module',
         cache: true,
@@ -424,28 +390,16 @@ async function getModuleInfoFromCode(code: string, id: string, ctx: PluginContex
         ]
     });
 
-    let componentIdent: string = 'Component';
-
     let classDeclarationIndex = -1;
 
     const imports: Record<string, ImportBinding> = {};
 
-    const curComponentMap: Record<string, ComponentMeta> = {};
+    const curComponentMap: ComponentMetaMap = new Map();
     await walkASTAsync(ast, {
         enter: async (node, parent) => {
             switch (node.type) {
                 case 'ImportDeclaration': {
                     walkImportDeclaration(imports, node);
-                    break;
-                }
-                case 'ImportSpecifier': {
-                    if (
-                        isImportDeclaration(parent) &&
-                        parent.source.value === 'prang' &&
-                        isIdentifierOf(node.imported, 'Component')
-                    ) {
-                        componentIdent = node.local.name;
-                    }
                     break;
                 }
                 case 'ClassDeclaration': {
@@ -454,7 +408,7 @@ async function getModuleInfoFromCode(code: string, id: string, ctx: PluginContex
                     for await (const decorator of node.decorators) {
                         if (
                             !isCallExpression(decorator.expression) ||
-                            !isIdentifierOf(decorator.expression.callee, componentIdent)
+                            !isImportOf(decorator.expression.callee, imports, 'Component', 'prang')
                         )
                             continue;
 
@@ -471,9 +425,7 @@ async function getModuleInfoFromCode(code: string, id: string, ctx: PluginContex
                         const meta = await getComponentMeta(decArg, node, id, scopeHash, imports, ctx);
                         meta.bindings = resolveBindings(node, imports);
 
-                        if (meta) {
-                            curComponentMap[scopeHash] = meta;
-                        }
+                        curComponentMap.set(scopeHash, meta);
                     }
                 }
             }
@@ -482,17 +434,16 @@ async function getModuleInfoFromCode(code: string, id: string, ctx: PluginContex
     return curComponentMap;
 }
 
-interface ModelDefinition {
-    name: string;
-    default?: {
-        start: number;
-        end: number;
-    };
-    options?: {
-        start: number;
-        end: number;
-    };
-}
+/**
+ * Convert inputs, outputs and models into compiled versions
+ *
+ * @example
+ * value = input(...)   >  value = _compiledInput("value", ...)
+ * model = model(...)   >  model = _compiledModel("model", ...)
+ * event = output(...)  >  event = _compiledOutput("event", ...)
+ *
+ * @returns Formatted decorator arguments for `props` and `emits`.
+ */
 function resolveProps(
     node: ClassDeclaration,
     s: MagicString,
@@ -504,9 +455,9 @@ function resolveProps(
     const outputIdentifier = importValues.find((imp) => imp.source == 'prang' && imp.imported == 'output')?.local;
     const modelIdentifier = importValues.find((imp) => imp.source == 'prang' && imp.imported == 'model')?.local;
 
-    const inputs = new Set<Expression>();
-    const outputs = new Set<ClassProperty>();
-    const models = new Set<ModelDefinition>();
+    const inputs = new Set<string>();
+    const outputs = new Set<string>();
+    const models = new Set<string>();
 
     for (const property of node.body.body) {
         if (
@@ -527,7 +478,7 @@ function resolveProps(
                 (property.value.typeParameters || property.value.callee).end! + 1,
                 stry(toKeyAlias(property)) + (property.value.arguments.length ? ', ' : '')
             );
-            inputs.add(property.key);
+            inputs.add(toKeyAlias(property));
         }
         // Model
         if (
@@ -541,13 +492,7 @@ function resolveProps(
                 (property.value.typeParameters || property.value.callee).end! + 1,
                 stry(toKeyAlias(property)) + (property.value.arguments.length ? ', ' : '')
             );
-            const arg1 = property.value.arguments[0];
-            const arg2 = property.value.arguments[1];
-            models.add({
-                name: camelize(s.original.slice(property.key.start!, property.key.end!)),
-                default: arg1 ? { start: arg1.start!, end: arg1.end! } : undefined,
-                options: arg2 ? { start: arg2.start!, end: arg2.end! } : undefined
-            });
+            models.add(camelize(s.original.slice(property.key.start!, property.key.end!)));
         }
         // Output
         if (
@@ -561,7 +506,7 @@ function resolveProps(
                 (property.value.typeParameters || property.value.callee).end! + 1,
                 stry(toKeyAlias(property)) + (property.value.arguments.length ? ', ' : '')
             );
-            outputs.add(property);
+            outputs.add(toKeyAlias(property));
         }
     }
 
@@ -572,11 +517,11 @@ function resolveProps(
     if (inputs.size || models.size) {
         results.inputs += '{ ';
         for (const input of inputs) {
-            results.inputs += `${s.original.slice(input.start!, input.end!)}: {}, `;
+            results.inputs += `${stry(input)}: {}, `;
         }
         for (const model of models) {
-            results.inputs += stry(model.name) + ': {}, ';
-            results.inputs += `${stry(model.name + 'Modifiers')}: {}, `;
+            results.inputs += stry(model) + ': {}, ';
+            results.inputs += `${stry(model + 'Modifiers')}: {}, `;
         }
         results.inputs += '}';
     }
@@ -584,16 +529,21 @@ function resolveProps(
     if (outputs.size || models.size) {
         results.outputs += `[`;
         for (const output of outputs) {
-            results.outputs += `${stry(toKeyAlias(output))}, `;
+            results.outputs += `${stry(output)}, `;
         }
         for (const model of models) {
-            results.outputs += `${stry('update:' + model.name)}, `;
+            results.outputs += `${stry('update:' + model)}, `;
         }
         results.outputs += `]`;
     }
     return results;
 }
 
+/**
+ * Resolve metadata bindings used in the component model
+ *
+ * @see {@linkcode compileTemplate|template.ts@compileTemplate}
+ */
 function resolveBindings(classNode: ClassDeclaration, imports: Record<string, ImportBinding>) {
     const getImportBinding = (name: string) => {
         return Object.values(imports).find((imp) => imp.source == 'prang' && imp.imported == name)?.local;

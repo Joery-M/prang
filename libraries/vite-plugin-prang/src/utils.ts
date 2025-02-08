@@ -1,4 +1,7 @@
+import type { Identifier, Node } from '@babel/types';
+import { isIdentifierOf, type ImportBinding } from 'ast-kit';
 import crypto from 'node:crypto';
+import type { ComponentMeta } from './internal';
 
 interface TemplateQuery {
     scopeId?: string;
@@ -8,10 +11,17 @@ interface TemplateQuery {
     styleIndex?: number;
 }
 
-export function parseTemplateRequest(id: string): {
+export interface TemplateRequest {
     filename: string;
     query: TemplateQuery;
-} {
+}
+
+export interface ComponentQuery {
+    meta: ComponentMeta;
+    request: TemplateRequest;
+}
+
+export function parseTemplateRequest(id: string): TemplateRequest {
     const [filename, rawQuery] = id.split(`?`, 2);
     const query = Object.fromEntries(new URLSearchParams(rawQuery)) as TemplateQuery;
     if (query.prang != null) {
@@ -60,4 +70,17 @@ function template(str: TemplateStringsArray | string, ...keys: any[]) {
         result.push(key, strings[i + 1]);
     });
     return result.join('');
+}
+
+export function isImportOf(
+    node: Node | undefined | null,
+    imports: Record<string, ImportBinding>,
+    imported: string,
+    source: string
+): node is Identifier {
+    const matchingLocalImports = Object.entries(imports)
+        .filter(([_l, bind]) => bind.imported === imported && bind.source === source)
+        .map(([i]) => i);
+
+    return isIdentifierOf(node, matchingLocalImports);
 }
