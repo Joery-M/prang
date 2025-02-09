@@ -28,11 +28,16 @@ Look in `libraries/playground` for the current testing setup.
 - [x] HMR for styles and templates
 - [x] 2 way binding
 - [ ] `contentChild()`
-- [ ] Template ref binding with `<comp #myComp />` (slot syntax will have to change)
+- [ ] Template ref binding with `<comp #myComp />` (for #slot syntax, use @slot control flow or *slot directive instead)
 - [x] Services using decorator
 - [ ] Directives using decorator
 - [ ] NgModule equivalent
 - [x] Injection
+- [x] Control flow (@if, @for (no trackBy yet), @slot)
+- [ ] SSR
+- [ ] Forms module
+- [ ] Angular style router
+- [ ] Formatter and IDE integration (unlikely)
 
 ## Why
 
