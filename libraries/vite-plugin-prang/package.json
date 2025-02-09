@@ -17,7 +17,6 @@
     "build": "rollup -c"
   },
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^28.0.2",
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@types/babel__core": "^7.20.5",
     "@types/babel__generator": "^7.6.8",

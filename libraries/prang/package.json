@@ -29,7 +29,6 @@
     "build": "rollup -c"
   },
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^28.0.2",
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@vueuse/core": "^12.5.0",
     "@vueuse/shared": "^12.5.0",

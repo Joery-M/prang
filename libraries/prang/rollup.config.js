@@ -1,9 +1,9 @@
-import commonjs from '@rollup/plugin-commonjs';
 import resolve from '@rollup/plugin-node-resolve';
 import { premove } from 'premove';
 import { defineConfig } from 'rollup';
 import esbuild from 'rollup-plugin-esbuild';
 import UnpluginIsolatedDecl from 'unplugin-isolated-decl/rollup';
+import packageJson from './package.json' with { type: 'json' };
 
 const banner = `/**
  * prang
@@ -11,8 +11,6 @@ const banner = `/**
  * @license MIT 2025-present Joery Münninghoff
  */
 `;
-
-const external = ['rxjs', '@vue/reactivity', '@vue/runtime-dom', '@vue/shared', '@vueuse/rxjs'];
 
 /**
  * @type {import('rollup').Plugin}
@@ -25,9 +23,9 @@ const cleanPlugin = {
 
 export default defineConfig({
     input: ['./src/index.ts', './src/runtime.ts', './src/rxjs.ts'],
-    plugins: [cleanPlugin, UnpluginIsolatedDecl(), resolve(), esbuild(), commonjs()],
+    plugins: [cleanPlugin, UnpluginIsolatedDecl(), resolve(), esbuild()],
     treeshake: true,
-    external,
+    external: [...Object.keys(packageJson.dependencies), ...Object.keys(packageJson.peerDependencies)],
     output: {
         banner,
         dir: 'dist',
