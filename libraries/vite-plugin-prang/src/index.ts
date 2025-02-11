@@ -1,17 +1,18 @@
 import { parseCache } from 'ast-kit';
 import { readFile } from 'fs/promises';
 import { createFilter, normalizePath, perEnvironmentState, type Plugin } from 'vite';
-import { componentTransform, getModuleInfoFromCode } from './component/component';
-import { ComponentMap } from './internal';
+import { getModuleInfo } from './classes/classes';
+import { componentTransform } from './classes/component';
+import { ClassMetaMap, ClassType } from './internal';
 import { compileStyle } from './style/style';
 import { compileTemplate } from './template/template';
 import { parseTemplateRequest, type ComponentQuery, type TemplateRequest } from './utils';
 
 const GlobalFilter = createFilter([/\0/, '**/node_modules/**']);
-const ComponentFilter = createFilter(/\.[tj]sx?$/, /\?prang/);
+const ClassFileFilter = createFilter(/\.[tj]sx?$/, /\?prang/);
 
 export function prang(): Plugin {
-    ComponentMap.clear();
+    ClassMetaMap.clear();
     parseCache.clear();
 
     const useHMR = perEnvironmentState((env) => env.mode === 'dev' && env.config.server.hmr !== false);
@@ -42,9 +43,9 @@ export function prang(): Plugin {
             if (GlobalFilter(id)) return;
 
             const request: TemplateRequest = parseTemplateRequest(id);
-            const meta = request.query.scopeId ? ComponentMap.get(request.query.scopeId) : undefined;
+            const meta = request.query.scopeId ? ClassMetaMap.get(request.query.scopeId) : undefined;
 
-            if (request.query.prang && meta) {
+            if (request.query.prang && meta?.type === ClassType.COMPONENT) {
                 const query: ComponentQuery = { request, meta };
                 if (request.query.type === 'inline-template') {
                     // Inline template
@@ -60,16 +61,16 @@ export function prang(): Plugin {
                     const currentStyle = meta.styles[request.query.styleIndex];
                     return compileStyle(currentStyle.code, query, this);
                 }
-            } else if (ComponentFilter(id)) {
+            } else if (ClassFileFilter(id)) {
                 const strippedId = id.split('?')[0];
 
                 const code = await readFile(id, { flag: 'r', encoding: 'utf-8' });
-                if (!code.includes('prang') || !code.includes('Component') || !code.includes('class')) {
+                if (!code.includes('prang') || !code.includes('class')) {
                     return;
                 }
-                const mappedComponents = await getModuleInfoFromCode(code, strippedId, this);
+                const mappedComponents = await getModuleInfo(code, strippedId, this);
                 for (const [s, m] of mappedComponents) {
-                    ComponentMap.set(s, m);
+                    ClassMetaMap.set(s, m);
                 }
             }
         },
@@ -77,9 +78,9 @@ export function prang(): Plugin {
             if (GlobalFilter(id)) return;
 
             const request = parseTemplateRequest(id);
-            const meta = request.query.scopeId ? ComponentMap.get(request.query.scopeId) : undefined;
+            const meta = request.query.scopeId ? ClassMetaMap.get(request.query.scopeId) : undefined;
 
-            if (request.query.prang && meta) {
+            if (request.query.prang && meta?.type === ClassType.COMPONENT) {
                 const query: ComponentQuery = { request, meta };
                 if (request.query.type === 'template') {
                     // Template compile
@@ -88,7 +89,7 @@ export function prang(): Plugin {
                     // Style compile
                     return compileStyle(code, query, this);
                 }
-            } else if (ComponentFilter(id)) {
+            } else if (ClassFileFilter(id)) {
                 return componentTransform(code, id, useHMR(this));
             }
         },

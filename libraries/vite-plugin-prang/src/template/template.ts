@@ -36,7 +36,7 @@ export function compileTemplate(code: string, { request, meta }: ComponentQuery,
         cacheHandlers: false,
         slotted: true,
         hmr: useHMR,
-        bindingMetadata: meta?.bindings,
+        bindingMetadata: meta.bindings,
         prefixIdentifiers,
         directiveTransforms: Object.assign({}, directiveTransforms, { model: transformModel }),
         scopeId,
@@ -47,7 +47,7 @@ export function compileTemplate(code: string, { request, meta }: ComponentQuery,
         sourceMap: true,
         mode: 'module',
         prefixIdentifiers,
-        bindingMetadata: meta?.bindings,
+        bindingMetadata: meta.bindings,
         inline,
         runtimeModuleName: 'prang/runtime',
         scopeId
@@ -58,7 +58,7 @@ export function compileTemplate(code: string, { request, meta }: ComponentQuery,
     if (meta?.bindings) {
         s.append(
             '\n\n/**\n * Analyzed bindings:\n' +
-                JSON.stringify(meta?.bindings, undefined, 2).replace(/^(.+)/gm, ' * $1') +
+                JSON.stringify(meta.bindings, undefined, 2).replace(/^(.+)/gm, ' * $1') +
                 '\n */\n'
         );
     }

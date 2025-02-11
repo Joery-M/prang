@@ -54,4 +54,7 @@ declare module '@vue/compiler-core' {
     export interface PlainElementNode extends PlainElementNode {
         isControlFlow?: boolean;
     }
+    export interface TemplateNode extends TemplateNode {
+        isControlFlow?: boolean;
+    }
 }

@@ -2,7 +2,7 @@
   "name": "@prang/playground",
   "type": "module",
   "scripts": {
-    "dev": "vite --force",
+    "dev": "vite --force --configLoader runner",
     "build": "vite build"
   },
   "devDependencies": {

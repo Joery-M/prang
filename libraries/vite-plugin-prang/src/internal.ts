@@ -1,18 +1,26 @@
 import type { SourceLocation } from '@babel/types';
-import { BindingTypes } from '@vue/compiler-core';
+import { BindingTypes, type BindingMetadata } from '@vue/compiler-core';
 import type { ImportBinding } from 'ast-kit';
 
-//@ts-ignore
+//@ts-ignore Not included in base @vue/compiler-core
 BindingTypes.SETUP_SIGNAL = 'setup-signal';
 
-export type BindingMetadata = {
-    [key: string]: BindingTypes | undefined;
-} & {
-    __isScriptSetup?: boolean;
-    __propsAliases?: Record<string, string>;
-};
+export enum ClassType {
+    COMPONENT,
+    PIPE,
+    MODULE,
+    UNKNOWN
+}
+
+export interface ComponentImportBinding extends ImportBinding {
+    type: ClassType;
+    scopeId?: string;
+}
+
+export type ClassMeta = ComponentMeta | PipeMeta | ModuleMeta;
 
 export interface ComponentMeta {
+    type: ClassType.COMPONENT;
     sourceId: string;
     className: string;
     selectors?: string[];
@@ -25,12 +33,25 @@ export interface ComponentMeta {
         loc: SourceLocation;
         code: string;
     }[];
-    imports?: ImportBinding[];
-    deleteLocs: SourceLocation[];
+    imports?: ComponentImportBinding[];
     preamble: string;
     bindings: BindingMetadata;
 }
 
+export interface PipeMeta {
+    type: ClassType.PIPE;
+    name: string;
+    sourceId: string;
+    className: string;
+}
+
+export interface ModuleMeta {
+    type: ClassType.MODULE;
+    sourceId: string;
+    className: string;
+    imports: ComponentImportBinding[];
+}
+
 export type ComponentMetaMap = Map<string, ComponentMeta>;
 
-export const ComponentMap: Map<string, ComponentMeta> = new Map<string, ComponentMeta>();
+export const ClassMetaMap: Map<string, ClassMeta> = new Map<string, ClassMeta>();

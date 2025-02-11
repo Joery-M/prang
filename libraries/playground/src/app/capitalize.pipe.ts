@@ -1,7 +1,7 @@
 import { Pipe } from 'prang';
 
 @Pipe({
-    name: 'capitalize'
+    name: 'capitalizePipe'
 })
 export class Capitalize {
     transform(value: string, lowerRest: boolean = false) {

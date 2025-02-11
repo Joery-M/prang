@@ -76,7 +76,7 @@ export function resolveFilter(name: string): any {
 
         if (!res) {
             const extra = ``;
-            console.warn(`Failed to resolve ${type.slice(0, -1)}: ${name}${extra}`);
+            console.warn(`Failed to resolve pipe: ${name}${extra}`);
         }
 
         return res;

@@ -25,7 +25,6 @@ import {
     resolveString,
     resolveTemplateLiteral,
     walkAST,
-    walkASTAsync,
     walkImportDeclaration,
     type ImportBinding
 } from 'ast-kit';
@@ -33,9 +32,9 @@ import { existsSync, readFileSync } from 'fs';
 import MagicString from 'magic-string';
 import path from 'pathe';
 import type { PluginContext, TransformResult } from 'rollup';
-import { ComponentMap, type ComponentMeta, type ComponentMetaMap } from '../internal';
+import { ClassMetaMap, ClassType, type ComponentImportBinding, type ComponentMeta, type PipeMeta } from '../internal';
 import { compileTemplate } from '../template/template';
-import { dedent, getHash, isImportOf, stry } from '../utils';
+import { dedent, getHash, stry } from '../utils';
 
 export async function componentTransform(code: string, id: string, useHMR: boolean): Promise<TransformResult> {
     const ast = babelParse(code, path.extname(id), {
@@ -70,9 +69,15 @@ export async function componentTransform(code: string, id: string, useHMR: boole
                     classDeclarationIndex++;
 
                     const scopeId = getHash(id + '#' + classDeclarationIndex);
-                    const meta = ComponentMap.get(scopeId);
+                    const meta = ClassMetaMap.get(scopeId);
                     const decorator = node.decorators?.[0];
-                    if (!meta || !decorator || !isCallExpression(decorator.expression)) break;
+                    if (
+                        !meta ||
+                        meta.type !== ClassType.COMPONENT ||
+                        !decorator ||
+                        !isCallExpression(decorator.expression)
+                    )
+                        break;
                     const helper = (helper: string) => {
                         const localVal = '_' + helper;
                         importedHelpers.set(helper, localVal);
@@ -90,12 +95,6 @@ export async function componentTransform(code: string, id: string, useHMR: boole
                         arg.start = decorator.expression.end! - 1;
                         insertedObj = true;
                     }
-                    const propsResult = resolveProps(node, s, imports, helper);
-
-                    for (const deleteLoc of meta.deleteLocs) {
-                        const charAfter = s.original.charAt(deleteLoc.end.index);
-                        s.remove(deleteLoc.start.index, deleteLoc.end.index + (charAfter === ',' ? 1 : 0));
-                    }
 
                     // Add preample
                     s.prependLeft(node.start!, meta.preamble);
@@ -103,7 +102,10 @@ export async function componentTransform(code: string, id: string, useHMR: boole
                         s.appendRight(arg.start!, '}');
                     }
 
-                    generateStaticFields(node, s, meta, scopeId, id, propsResult, useHMR, helper);
+                    // Remove decorator
+                    s.remove(decorator.start!, decorator.end!);
+
+                    generateStaticFields(node, s, meta, scopeId, id, useHMR, helper, imports);
                 }
             }
         }
@@ -136,10 +138,39 @@ function generateStaticFields(
     meta: ComponentMeta,
     scopeId: string,
     filePath: string,
-    propsResult: ReturnType<typeof resolveProps>,
     useHMR: boolean,
-    helper: (key: string) => string
+    helper: (key: string) => string,
+    imports: Record<string, ImportBinding>
 ) {
+    meta.imports ||= [];
+    const formatBinding = (str1: string, str2: string) => stry(str1) + ': ' + str2;
+
+    const componentArray = meta.imports
+        .filter((imp) => imp.type === ClassType.COMPONENT)
+        .map((imp) => {
+            if (imp.scopeId) {
+                const meta = ClassMetaMap.get(imp.scopeId) as ComponentMeta;
+                if (meta.selectors) {
+                    return meta.selectors.map((s) => formatBinding(s, imp.local));
+                } else {
+                    return formatBinding(meta.className, imp.local);
+                }
+            }
+            return imp.local;
+        })
+        .flat()
+        .join(', ');
+    const pipeArray = meta.imports
+        .filter((imp) => imp.type === ClassType.PIPE)
+        .map((imp) => {
+            if (imp.scopeId) {
+                const meta = ClassMetaMap.get(imp.scopeId) as PipeMeta;
+                if (meta.name) return formatBinding(meta.name, imp.local);
+            }
+            return imp.local;
+        })
+        .join(', ');
+    const propsResult = resolveProps(node, s, imports, helper);
     if (process.env.NODE_ENV === 'production') {
         let templateCode = meta.template?.source ?? '';
         let filename = (meta.inlineTemplate ? filePath : meta.template?.source) ?? filePath;
@@ -159,10 +190,14 @@ function generateStaticFields(
             static {
                 this.__vType = ${helper('CLASS_COMPONENT')};
                 this.__vInjectionId = Symbol(this.name);
+                this.__vSelector = ${stry(meta.className)};
                 this.__vccOpts = {
                     __scopeId: ${stry('data-v-' + scopeId)},
+                    __name: ${stry(meta.className)},
                     ${propsResult.inputs ? 'props: ' + propsResult.inputs + ',' : ''}
                     ${propsResult.outputs ? 'emits: ' + propsResult.outputs + ',' : ''}
+                    components: {${componentArray}},
+                    filters: {${pipeArray}},
                     setup: (_p, { expose }) => {
                         const $setup = ${helper('wrapClassComponent')}(new this());
                         $setup.__isScriptSetup = true;
@@ -185,12 +220,16 @@ function generateStaticFields(
             static {
                 this.__vType = ${helper('CLASS_COMPONENT')};
                 this.__vInjectionId = Symbol(this.name);
+                this.__vSelector = ${stry(meta.className)};
                 this.__vccOpts = {
+                    __name: ${stry(meta.className)},
                     __file: ${stry(filePath)},
                     __scopeId: ${stry('data-v-' + scopeId)},
                     ${useHMR ? '__hmrId: ' + stry(scopeId) + ',' : ''}
                     ${propsResult.inputs ? 'props: ' + propsResult.inputs + ',' : ''}
                     ${propsResult.outputs ? 'emits: ' + propsResult.outputs + ',' : ''}
+                    components: {${componentArray}},
+                    filters: {${pipeArray}},
                     setup: (_p, { expose }) => {
                         const instance = ${helper('wrapClassComponent')}(new this());
                         instance.__isScriptSetup = true;
@@ -229,28 +268,62 @@ function generateStaticFields(
     }
 }
 
-async function getComponentMeta(
+async function resolveComponentImports(
+    meta: ComponentMeta,
+    imports: ImportBinding[],
+    identifiers: string[],
+    ctx: PluginContext
+) {
+    const resolvePromises = imports
+        .filter((imp) => identifiers.includes(imp.local))
+        .map(async (im) => {
+            const resolved = await ctx.resolve(im.source, meta.sourceId);
+            im.source = resolved?.id ?? im.source;
+            let type: ClassType = ClassType.UNKNOWN;
+            let scopeId: string | undefined;
+            if (resolved) {
+                if (!ctx.getModuleInfo(resolved.id)) {
+                    // First time, scan file
+                    await ctx?.load({ ...resolved, resolveDependencies: true });
+                }
+                const foundComponent = Array.from(ClassMetaMap.entries()).find(
+                    (meta) => meta[1].sourceId === resolved.id
+                );
+                if (foundComponent) {
+                    type = foundComponent[1].type;
+                    scopeId = foundComponent[0];
+                } else {
+                    console.log('Not found:', im.source);
+                }
+            }
+            return { ...im, type, scopeId } satisfies ComponentImportBinding;
+        });
+
+    return await Promise.all(resolvePromises);
+}
+
+export async function getComponentMeta(
     decoratorArg: ObjectExpression,
     classNode: ClassDeclaration,
     id: string,
     scopeHash: string,
     imports: Record<string, ImportBinding>,
     ctx: PluginContext
-) {
+): Promise<ComponentMeta> {
     const className = classNode.id ? resolveIdentifier(classNode.id)[0] : undefined;
     if (!className) {
         ctx.error({
             loc: classNode.body.loc!.start,
             id,
-            message: 'Component requires class to have a name'
+            message: '@Component requires class to have a name'
         });
     }
     const meta: ComponentMeta = {
-        deleteLocs: [],
+        type: ClassType.COMPONENT,
         preamble: '',
         sourceId: id,
         className,
-        bindings: {}
+        bindings: resolveBindings(classNode, imports)
     };
 
     for await (const prop of decoratorArg.properties) {
@@ -275,7 +348,6 @@ async function getComponentMeta(
                     meta.preamble += importExp;
                 }
                 meta.template = { loc: prop.loc!, source: resolvedId };
-                meta.deleteLocs.push(prop.loc!);
                 break;
             }
             case 'template': {
@@ -291,7 +363,6 @@ async function getComponentMeta(
                 }
                 meta.template = { loc: prop.loc!, source: templateString };
                 meta.inlineTemplate = true;
-                meta.deleteLocs.push(prop.loc!);
                 break;
             }
 
@@ -300,19 +371,8 @@ async function getComponentMeta(
                 const referencedIdentifiers = prop.value.elements.filter((v) => v?.type === 'Identifier');
                 const identifiers = referencedIdentifiers.flatMap((i) => resolveIdentifier(i));
 
-                meta.imports = await Promise.all(
-                    Object.values(imports)
-                        .filter((imp) => identifiers.includes(imp.local))
-                        .map(async (im) => {
-                            const resolved = await ctx.resolve(im.source, id);
-                            im.source = resolved?.id ?? im.source;
-                            if (resolved && !ctx.getModuleInfo(resolved.id)) {
-                                // Load imports
-                                await ctx?.load({ ...resolved, resolveDependencies: true });
-                            }
-                            return im;
-                        })
-                );
+                const compImports = await resolveComponentImports(meta, Object.values(imports), identifiers, ctx);
+                meta.imports = compImports;
                 break;
             }
 
@@ -335,7 +395,6 @@ async function getComponentMeta(
                         }
                     })
                 );
-                meta.deleteLocs!.push(prop.loc!);
                 break;
             }
 
@@ -355,7 +414,6 @@ async function getComponentMeta(
                     tmplUrl = `import ${stry(tmplUrl)};\n`;
                     meta.preamble += tmplUrl;
                 });
-                meta.deleteLocs.push(prop.loc!);
                 break;
             }
 
@@ -364,70 +422,6 @@ async function getComponentMeta(
         }
     }
     return meta;
-}
-
-/**
- * Parse code, find components, return metadata for each component.
- */
-export async function getModuleInfoFromCode(code: string, id: string, ctx: PluginContext): Promise<ComponentMetaMap> {
-    const ast = babelParse(code, path.extname(id), {
-        sourceType: 'module',
-        cache: true,
-        sourceFilename: id,
-        errorRecovery: true,
-        plugins: [
-            'jsx',
-            'typescript',
-            ['decorators', { allowCallParenthesized: true, decoratorsBeforeExport: true }],
-            'decoratorAutoAccessors',
-            'exportDefaultFrom',
-            'functionBind',
-            'importAssertions'
-        ]
-    });
-
-    let classDeclarationIndex = -1;
-
-    const imports: Record<string, ImportBinding> = {};
-
-    const curComponentMap: ComponentMetaMap = new Map();
-    await walkASTAsync(ast, {
-        enter: async (node, parent) => {
-            switch (node.type) {
-                case 'ImportDeclaration': {
-                    walkImportDeclaration(imports, node);
-                    break;
-                }
-                case 'ClassDeclaration': {
-                    classDeclarationIndex++;
-                    if (!node.decorators || node.decorators.length == 0) return;
-                    for await (const decorator of node.decorators) {
-                        if (
-                            !isCallExpression(decorator.expression) ||
-                            !isImportOf(decorator.expression.callee, imports, 'Component', 'prang')
-                        )
-                            continue;
-
-                        const scopeHash = getHash(id + '#' + classDeclarationIndex);
-
-                        let decArg: ObjectExpression | undefined = isObjectExpression(decorator.expression.arguments[0])
-                            ? decorator.expression.arguments[0]
-                            : undefined;
-
-                        if (!decArg) {
-                            decArg = objectExpression([]);
-                            decArg.start = decorator.expression.end! - 1;
-                        }
-                        const meta = await getComponentMeta(decArg, node, id, scopeHash, imports, ctx);
-                        meta.bindings = resolveBindings(node, imports);
-
-                        curComponentMap.set(scopeHash, meta);
-                    }
-                }
-            }
-        }
-    });
-    return curComponentMap;
 }
 
 /**
@@ -458,7 +452,7 @@ function resolveProps(
     for (const property of node.body.body) {
         if (
             !isClassProperty(property) ||
-            ![undefined, null, 'public'].includes(property.accessibility) ||
+            ![undefined, null, 'public', 'protected'].includes(property.accessibility) ||
             property.static
         )
             continue;

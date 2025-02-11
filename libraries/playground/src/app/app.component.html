@@ -40,9 +40,9 @@
 <input type="text" v-model="text" />
 <input type="text" [(model)]="text" />
 
-<p>{{ text() | capitalize }}</p>
-<p>{{ text() | capitalize(true) }}</p>
-<p>{{ (text() | this.addA) | capitalize(true) }}</p>
+<p>{{ text() | capitalizePipe }}</p>
+<p>{{ text() | capitalizePipe(true) }}</p>
+<p>{{ (text() | this.addA) | capitalizePipe(true) }}</p>
 <p>{{ text() | this.addA | this.addA }}</p>
 
 <button (click)="text.set('asdf')">Set to 'asdf'</button>

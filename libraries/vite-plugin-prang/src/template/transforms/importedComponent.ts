@@ -7,22 +7,23 @@ import {
     isCoreComponent,
     NodeTypes
 } from '@vue/compiler-core';
-import { kebabCase } from 'scule';
-import { type ComponentMeta, ComponentMap } from '../../internal';
+import { kebabCase, pascalCase } from 'scule';
+import { type ComponentMeta, ClassMetaMap, ClassType } from '../../internal';
 
 export function importedComponentTransform(meta?: ComponentMeta) {
     // Resolve all imported components by their selectors
     const components = new Set<string>();
 
-    const allComponents = Array.from(ComponentMap.values());
+    const allComponents = Array.from(ClassMetaMap.values());
     meta?.imports?.forEach((binding) => {
         allComponents.find((meta) => {
             if (meta.sourceId === binding.source) {
                 if (meta.className) {
+                    components.add(pascalCase(meta.className));
                     components.add(kebabCase(meta.className));
                     components.add(meta.className);
                 }
-                if (meta.selectors) {
+                if (meta.type === ClassType.COMPONENT && meta.selectors) {
                     meta.selectors.forEach((val) => {
                         components.add(val);
                     });
